@@ -232,6 +232,16 @@ def synthetic_dataset(
     For production IsolationForest/PCA training, always use attack_episodes=0.
     For evaluation / threshold calibration, pass attack_episodes > 0.
     """
+    # Live-baseline override: when LAB_LIVE_BASELINE_NPY points at a matrix captured
+    # from REAL traffic (capture_live_baseline.py), train on that instead of the
+    # synthetic generator — this is the "train on real data" path that removes the
+    # train/serve skew. Only applies to pure-baseline training (attack_episodes==0);
+    # attack evaluation below still uses the synthetic attack generators.
+    _live = os.environ.get("LAB_LIVE_BASELINE_NPY")
+    if _live and attack_episodes == 0 and os.path.exists(_live):
+        X_live = np.load(_live).astype(np.float64)
+        return X_live, np.zeros(len(X_live), dtype=np.int8)
+
     rows = synthetic_baseline(minutes=baseline_minutes)
 
     if attack_episodes > 0:

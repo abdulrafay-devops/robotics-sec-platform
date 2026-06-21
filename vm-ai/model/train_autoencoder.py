@@ -83,9 +83,15 @@ def main(argv=None) -> int:
     train_err  = recon_err(X_train_s)
     calib_err  = recon_err(X_calib_s)
     mean_err   = float(np.mean(train_err))
-    std_err    = float(np.std(train_err) + 1e-9)
+    # On an ultra-regular, near rank-1 baseline (e.g. a single-arm cell where only
+    # the read volume varies) a LINEAR PCA reconstructs normal almost perfectly, so
+    # the raw std collapses to ~0 and the z-score blows up on any tiny deviation
+    # (degenerate threshold). Floor the std and the alert-z so the gate stays usable:
+    # normal (err~0) stays ~0 sigma while a real attack (err ~O(1) in scaled space)
+    # still fires. The non-linear TF autoencoder carries the fine-grained sensitivity.
+    std_err    = float(max(np.std(train_err), 1e-2))
     p99_err    = float(np.percentile(calib_err, 99))
-    z_at_p99   = (p99_err - mean_err) / std_err
+    z_at_p99   = max(4.0, (p99_err - mean_err) / std_err)
 
     LOG.info("Normal recon error: mean=%.6f  std=%.6f  p99=%.6f  z@p99=%.2f",
              mean_err, std_err, p99_err, z_at_p99)

@@ -44,13 +44,14 @@ const THREAT_CFG = {
 } as const
 
 function computeThreatLevel(iforest: number, pcaZ: number, rate: number): ThreatLevel {
-  // Boundaries align to the live-calibrated model: the IsolationForest anomaly
-  // threshold is ~0.143 and the PCA/TF z-alert is ~4.0. The NORMAL single-arm
-  // baseline sits at iforest ~0.10 and pca_z ~0.6, so anything BELOW the model's
-  // alert line must read NOMINAL — WATCH must not start under the baseline.
-  if (iforest > 0.25  || pcaZ > 10  || rate > 30) return 'CRITICAL'
-  if (iforest > 0.18  || pcaZ > 6.43 || rate > 15) return 'ELEVATED'
-  if (iforest > 0.143 || pcaZ > 4.0  || rate > 5)  return 'WATCH'
+  // Boundaries align to the LIVE-RETRAINED model: the IsolationForest anomaly
+  // threshold is ~0.213 (normal single-arm windows score 0..~0.21) and the PCA/TF
+  // z-alert is ~4.0. WATCH must sit ABOVE the normal iforest range, so it starts at
+  // the model's alert line; attack escalation is driven mainly by pca_z (which jumps
+  // into the thousands on an attack while the iforest stays modest).
+  if (iforest > 0.45  || pcaZ > 10  || rate > 30) return 'CRITICAL'
+  if (iforest > 0.30  || pcaZ > 6.43 || rate > 15) return 'ELEVATED'
+  if (iforest > 0.22  || pcaZ > 4.0  || rate > 5)  return 'WATCH'
   return 'NOMINAL'
 }
 
@@ -415,12 +416,12 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
           {/* IForest Gauge */}
           <div className="card flex flex-col items-center py-3 gap-1">
             <div className="card-header justify-center !mb-1">IsolationForest</div>
-            <ArcGauge value={iForest} max={0.50} dangerAt={0.20} warnAt={0.143}
-              label="IF Score" sublabel=">0.14 = anomaly" />
+            <ArcGauge value={iForest} max={0.50} dangerAt={0.30} warnAt={0.22}
+              label="IF Score" sublabel=">0.21 = anomaly" />
             <div className={clsx('text-[8.5px] font-mono text-center mt-0.5',
-              iForest >= 0.20 ? 'text-red-400 font-bold' : iForest >= 0.143 ? 'text-amber-400' : iForest >= 0 ? 'text-emerald-500' : 'text-slate-700')}>
-              {iForest >= 0.20 ? '▲ OUTLIER'
-               : iForest >= 0.143 ? '⚠ ELEVATED'
+              iForest >= 0.30 ? 'text-red-400 font-bold' : iForest >= 0.22 ? 'text-amber-400' : iForest >= 0 ? 'text-emerald-500' : 'text-slate-700')}>
+              {iForest >= 0.30 ? '▲ OUTLIER'
+               : iForest >= 0.22 ? '⚠ ELEVATED'
                : iForest >= 0    ? '✓ NOMINAL'
                :                  '— WAITING'}
             </div>
