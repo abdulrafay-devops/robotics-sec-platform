@@ -1,0 +1,74 @@
+# =============================================================================
+# Read-only Historian / SCADA monitoring proxy (DMZ, port 8086)
+# =============================================================================
+# Serves the static wall-board and proxies ONLY read (GET) endpoints to the
+# scoring API on container-ai, injecting the API key server-side so the browser
+# never sees it. Every write/control endpoint is refused at the edge (403), so
+# this DMZ page is structurally incapable of commanding the PLC.
+#
+# ${LAB_API_KEY} is substituted at container start by envsubst (see the
+# historian service command in docker-compose.yml).
+# =============================================================================
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript image/svg+xml;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
+    }
+
+    # ---- Read-only API surface ------------------------------------------------
+    # The key is added here, server-side. limit_except GET blocks any non-GET.
+    # container-ai dmz-net address is fixed at 192.168.30.35 (see compose).
+    location = /api/hmi/state {
+        limit_except GET { deny all; }
+        proxy_set_header X-API-Key "${LAB_API_KEY}";
+        proxy_set_header Host $host;
+        proxy_read_timeout 8s;
+        proxy_pass http://192.168.30.35:8000;
+    }
+    location /api/hmi/logs {
+        limit_except GET { deny all; }
+        proxy_set_header X-API-Key "${LAB_API_KEY}";
+        proxy_set_header Host $host;
+        proxy_read_timeout 8s;
+        proxy_pass http://192.168.30.35:8000;
+    }
+    location /api/trend {
+        limit_except GET { deny all; }
+        proxy_set_header X-API-Key "${LAB_API_KEY}";
+        proxy_set_header Host $host;
+        proxy_read_timeout 8s;
+        proxy_pass http://192.168.30.35:8000;
+    }
+    location /api/ir/incidents {
+        limit_except GET { deny all; }
+        proxy_set_header X-API-Key "${LAB_API_KEY}";
+        proxy_set_header Host $host;
+        proxy_read_timeout 8s;
+        proxy_pass http://192.168.30.35:8000;
+    }
+    location /api/stages/reports {
+        limit_except GET { deny all; }
+        proxy_set_header X-API-Key "${LAB_API_KEY}";
+        proxy_set_header Host $host;
+        proxy_read_timeout 8s;
+        proxy_pass http://192.168.30.35:8000;
+    }
+
+    # Anything else under /api/ (control, simulate, inject-attack, vendor,
+    # approve, trigger-sros2-estop, ...) is refused: this page is read-only.
+    location /api/ {
+        return 403;
+    }
+}

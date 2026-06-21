@@ -1,0 +1,40 @@
+# Stage 6 — Prometheus configuration for the lab.
+#
+# Scrapes the lab's custom Python exporter on container-ai. The project now
+# runs as a Docker Compose simulation, so cross-container health is exported
+# by lab_exporter instead of legacy per-VM node_exporter agents.
+#
+# Retention is set to 30 days via prometheus.service ExecStart flags
+# (see infra/provision/vm-ai.sh §7).
+
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+rule_files:
+  - 'lab_alerts.yml'
+
+scrape_configs:
+  - job_name: prometheus_self
+    static_configs:
+      - targets: ['localhost:9090']
+        labels: {host: vm-ai, role: monitor}
+
+  - job_name: grafana
+    static_configs:
+      - targets: ['localhost:3000']
+        labels: {host: vm-ai, role: dashboard}
+
+  - job_name: lab_exporter
+    static_configs:
+      - targets: ['localhost:9101']
+        labels: {host: vm-ai, role: lab_metrics}
+
+# Alertmanager wiring is left here as a reference; the lab uses the
+# playbook engine instead of Alertmanager since playbooks need to
+# compose richer (graded) actions than Alertmanager's webhook can
+# describe.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['localhost:9093']

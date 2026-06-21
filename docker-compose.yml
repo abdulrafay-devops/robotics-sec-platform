@@ -1,0 +1,360 @@
+# ============================================================================
+# TRUE IDMZ ARCHITECTURE — single-homed zones behind one router/firewall.
+# Every app container sits on exactly ONE zone network; `router-fw` is the only
+# multi-homed node and enforces all cross-zone conduits (default-deny nftables).
+# See IDMZ-REARCHITECTURE.md. Original (multi-homed) stack is committed at a86e464.
+#
+# NOTE: container/service names match the original, so `docker compose down` the
+# original stack before `up` here. Networks are project-prefixed (no fixed name:)
+# so they do not collide with the original lab-* networks.
+# ============================================================================
+services:
+
+  # ── ROUTER / FIREWALL — the ONLY multi-homed container ────────────────────
+  router-fw:
+    build:
+      context: ./infra/router
+      dockerfile: Dockerfile.router
+    container_name: router-fw
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv4.ip_forward=1
+    networks:
+      it-net:   { ipv4_address: 192.168.20.2 }
+      dmz-net:  { ipv4_address: 192.168.30.2 }
+      mgmt-net: { ipv4_address: 192.168.40.2 }
+      ot-net:   { ipv4_address: 192.168.10.2 }
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
+
+  # ── OT ZONE (single-homed: ot-net) ────────────────────────────────────────
+  container-ot:
+    build:
+      context: ./vm-ot
+      dockerfile: Dockerfile.ot
+    container_name: container-ot
+    restart: unless-stopped
+    environment:
+      - LAB_API_KEY=${LAB_API_KEY}
+    deploy:
+      resources:
+        limits: { memory: 4G, cpus: '2.0' }
+    cap_add:
+      - NET_ADMIN          # alias IP + default route via router (10.2)
+    ports:
+      - "127.0.0.1:502:502"   # loopback only (host debug)
+      - "127.0.0.1:503:503"
+      - "8080:8080"           # OpenPLC web (operator, host port)
+    expose:
+      - "3389"                # OT desktop for Guacamole RDP only
+    networks:
+      ot-net: { ipv4_address: 192.168.10.10 }
+    depends_on:
+      - router-fw
+    volumes:
+      - ot-logs:/var/lab/log
+      - lab-state:/var/lab/state
+      - ./:/vagrant:ro
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
+
+  # ── SEC ZONE (mgmt-net for reporting + participating monitor on ot-net) ───
+  # NOTE: a Docker bridge does not mirror third-party unicast to a passive port
+  # (tested), so an IP-less SPAN tap sees nothing. SEC therefore keeps an OT IP and
+  # participates — it generates the baseline read traffic and sniffs it (the proven
+  # original model). In a real plant this would be a hardware SPAN/TAP. SEC + the
+  # router are the only multi-homed containers; SEC's OT presence is a monitoring
+  # necessity (documented trade-off).
+  container-sec:
+    build:
+      context: ./vm-sec
+      dockerfile: Dockerfile.sec
+    container_name: container-sec
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { memory: 2G, cpus: '1.5' }
+    cap_add:
+      - NET_ADMIN          # add the OT->mgmt route to the router for Redis shipping
+    ports:
+      - "3001:3001"
+    environment:
+      - LAB_REDIS_HOST=192.168.40.30   # AI Redis, via router conduit (OT->mgmt:6379)
+      - LAB_REDIS_PORT=6379
+      - LAB_REDIS_PASSWORD=${REDIS_PASSWORD}
+    networks:
+      # Single-homed on OT: an OT-resident IDS. No mgmt NIC -> cannot pivot to mgmt.
+      ot-net:   { ipv4_address: 192.168.10.20 }
+    depends_on:
+      router-fw:
+        condition: service_started
+      container-ot:
+        condition: service_started
+      container-ai:
+        condition: service_healthy
+    volumes:
+      - sec-logs:/var/lab/log
+      - lab-state:/var/lab/state
+      - ./vm-ot:/opt/lab/vm-ot:ro
+      - ./:/vagrant:ro
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
+
+  # ── MGMT ZONE — AI / analytics (single-homed: mgmt-net) ───────────────────
+  container-ai:
+    build:
+      context: ./vm-ai
+      dockerfile: Dockerfile.ai
+    container_name: container-ai
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { memory: 6G, cpus: '3.0' }
+    cap_add:
+      - NET_ADMIN          # route to OT (10.0/24) via router (40.2)
+    ports:
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:9000:9000"
+      - "9090:9090"
+      - "3003:3000"
+      - "9101:9101"
+    environment:
+      - LAB_API_KEY=${LAB_API_KEY}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - LAB_REDIS_HOST=127.0.0.1
+      - LAB_REDIS_PORT=6379
+      - GITEA_WEBHOOK_SECRET=${GITEA_WEBHOOK_SECRET}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set in .env}
+      - LAB_SKIP_ACCEPTANCE=1
+      # IDMZ: AI is read-only to OT. Reads go through the OT read-only proxy,
+      # writes go through the OT control gateway. AI never touches PLC:502 direct.
+      - LAB_PLC_HOST=192.168.10.10
+      - LAB_PLC_PORT=5020
+      - LAB_CONTROL_GATEWAY_URL=http://192.168.10.10:8002
+    networks:
+      mgmt-net: { ipv4_address: 192.168.40.30 }
+    depends_on:
+      - router-fw
+    volumes:
+      - ai-logs:/var/lab/log
+      - lab-state:/var/lab/state
+      - ai-models:/opt/lab/models
+      - ai-evidence:/var/lab/evidence
+      - ai-artifacts:/var/lab/artifacts
+      - sec-logs:/var/lab/sec-log:ro
+      - deploy-store:/var/lab/deploy-store   # CI signs + publishes here (Stage 5)
+      - ./:/vagrant:ro
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+
+  # ── IT ZONE — Gitea (single-homed: it-net; route-wrapped) ─────────────────
+  gitea:
+    image: gitea/gitea:1.22.0
+    container_name: lab-gitea
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    # Wrap the image entrypoint to add routes to DMZ (artifact store) + MGMT
+    # (AI webhook) via the router, then exec the original entrypoint+cmd.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - "ip route add 192.168.30.0/24 via 192.168.20.2 2>/dev/null; ip route add 192.168.40.0/24 via 192.168.20.2 2>/dev/null; exec /usr/bin/entrypoint /bin/s6-svscan /etc/s6"
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=sqlite3
+      - GITEA__security__INSTALL_LOCK=true
+      - GITEA__actions__ENABLED=true
+      - GITEA__server__ROOT_URL=http://192.168.20.20:3000/
+      - GITEA__server__HTTP_PORT=3000
+      - GITEA__webhook__ALLOWED_HOST_LIST=container-ai,192.168.40.30,localhost,127.0.0.1
+    ports:
+      - "3000:3000"
+      - "2222:22"
+    networks:
+      it-net: { ipv4_address: 192.168.20.20 }
+    volumes:
+      - gitea-data:/data
+
+  runner:
+    image: gitea/act_runner:0.2.10
+    container_name: lab-gitea-runner
+    restart: unless-stopped
+    depends_on:
+      - gitea
+    volumes:
+      - runner-data:/data
+    environment:
+      - GITEA_INSTANCE_URL=http://192.168.20.20:3000
+      - GITEA_RUNNER_REGISTRATION_TOKEN=${GITEA_RUNNER_TOKEN}
+      - GITEA_RUNNER_LABELS=ubuntu-latest:docker://catthehacker/ubuntu:act-latest
+    networks:
+      it-net: { ipv4_address: 192.168.20.25 }
+
+  # ── DMZ ZONE — Guacamole jump host + Postgres + guacd ─────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: lab-guac-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: guacamole_db
+      POSTGRES_USER: guacamole_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - guac-db:/var/lib/postgresql/data
+      - ./infra/dmz/initdb:/docker-entrypoint-initdb.d:ro
+    networks:
+      dmz-net: { ipv4_address: 192.168.30.21 }
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guacamole_user -d guacamole_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  guacd:
+    image: guacamole/guacd:1.5.5
+    container_name: lab-guacd
+    restart: unless-stopped
+    networks:
+      dmz-net: { ipv4_address: 192.168.30.22 }
+
+  guacamole:
+    build:
+      context: ./infra/guacamole
+      dockerfile: Dockerfile
+    container_name: lab-guacamole
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      guacd:
+        condition: service_started
+    cap_add:
+      - NET_ADMIN
+    # Image has no ENTRYPOINT; CMD is /opt/guacamole/bin/start.sh. Add a route to
+    # OT (for RDP brokering) via the router, then exec the original start script.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - "ip route add 192.168.10.0/24 via 192.168.30.2 2>/dev/null; exec /opt/guacamole/bin/start.sh"
+    environment:
+      GUACD_HOSTNAME: 192.168.30.22
+      GUACD_PORT: '4822'
+      POSTGRES_HOSTNAME: 192.168.30.21
+      POSTGRES_DATABASE: guacamole_db
+      POSTGRES_USER: guacamole_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      WEBAPP_CONTEXT: ROOT
+    ports:
+      - "8081:8080"
+    networks:
+      dmz-net: { ipv4_address: 192.168.30.20 }
+
+  # ── DMZ ZONE — read-only historian / artifact-store wall-board ────────────
+  historian:
+    image: nginx:1.27-alpine
+    container_name: lab-historian-stub
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - LAB_API_KEY=${LAB_API_KEY}
+    ports:
+      - "8086:80"
+    networks:
+      dmz-net: { ipv4_address: 192.168.30.40 }
+    volumes:
+      - ./infra/dmz/historian-stub:/usr/share/nginx/html:ro
+      - deploy-store:/usr/share/nginx/html/deploy:ro   # brokered store OT pulls from (Stage 5)
+      - ./infra/dmz/historian.conf.template:/etc/nginx/historian.conf.template:ro
+    command:
+      - /bin/sh
+      - -c
+      - "for n in 192.168.40.0/24 192.168.20.0/24 192.168.10.0/24; do ip route add $$n via 192.168.30.2 2>/dev/null; done; envsubst '$${LAB_API_KEY}' < /etc/nginx/historian.conf.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── MGMT ZONE — operator dashboard (single-homed: mgmt-net) ───────────────
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile.dashboard
+    container_name: container-dashboard
+    restart: unless-stopped
+    environment:
+      - LAB_API_KEY=${LAB_API_KEY}
+    ports:
+      - "8888:80"
+      - "8443:443"
+    networks:
+      mgmt-net: { ipv4_address: 192.168.40.40 }
+    depends_on:
+      - container-ai
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "lab.zone=management"
+      - "lab.service=dashboard"
+
+# ==============================================================================
+volumes:
+  ot-logs:
+  lab-state:
+  sec-logs:
+  ai-logs:
+  ai-models:
+  ai-evidence:
+  ai-artifacts:
+  deploy-store:   # Stage 5 signed-artifact store (AI writes, historian serves, OT pulls)
+  gitea-data:
+  runner-data:
+  guac-db:
+
+# ==============================================================================
+# Single-homed zone networks. ot-net is internal (no internet). No fixed name:
+# so these are project-prefixed and won't collide with the original lab-* nets.
+# ==============================================================================
+networks:
+  it-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.20.0/24
+  dmz-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.30.0/24
+  mgmt-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.40.0/24
+  ot-net:
+    driver: bridge
+    # NOT internal: the router/firewall (default-route for OT) enforces OT's
+    # no-internet + no-cross-zone via default-deny. Docker `internal:true` would
+    # additionally drop router-forwarded traffic INTO this bridge, breaking the
+    # legitimate AI->proxy / Guacamole->RDP conduits. Isolation = the firewall.
+    ipam:
+      config:
+        - subnet: 192.168.10.0/24

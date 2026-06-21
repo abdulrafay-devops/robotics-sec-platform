@@ -1,0 +1,75 @@
+FROM ubuntu:22.04
+
+# Prevent interactive prompts during apt install
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install common utilities
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    gnupg2 \
+    software-properties-common \
+    iproute2 \
+    iputils-ping \
+    net-tools \
+    tcpdump \
+    tshark \
+    python3-pip \
+    python3-venv \
+    build-essential \
+    nmap \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add Zeek Repository
+RUN curl -fsSL https://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/Release.key \
+    | gpg --dearmor -o /usr/share/keyrings/zeek.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/zeek.gpg] https://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /" \
+    > /etc/apt/sources.list.d/zeek.list
+
+# Add Suricata Repository
+RUN add-apt-repository -y ppa:oisf/suricata-stable
+
+# Install Zeek, Suricata, ntopng
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    zeek-lts \
+    suricata \
+    ntopng \
+    && rm -rf /var/lib/apt/lists/*
+
+# Symlink zeek binaries
+RUN ln -sf /opt/zeek/bin/zeek /usr/local/sbin/zeek && \
+    ln -sf /opt/zeek/bin/zeekctl /usr/local/sbin/zeekctl
+
+# Setup paths and virtual environment
+WORKDIR /opt/lab
+RUN python3 -m venv venv-shipper && \
+    venv-shipper/bin/pip install --upgrade pip wheel && \
+    venv-shipper/bin/pip install \
+    'redis==5.0.8' \
+    'pymodbus==3.7.4' \
+    'PyYAML==6.0.2'
+
+# Create necessary directories
+RUN mkdir -p /var/lab/log/zeek /var/lab/state/zeek-spool /var/log/suricata /var/lab/log/zeek/current \
+    /var/run/ntopng /var/lib/ntopng /etc/suricata/rules \
+    /opt/lab/log_shipper /opt/lab/vm-sec/vuln /opt/lab/vm-sec/ntopng /opt/lab/vm-sec/suricata/rules
+
+# Copy configuration templates and scripts
+COPY zeek/local.zeek /opt/zeek/share/zeek/site/local.zeek
+COPY zeek/scripts/modbus-features.zeek /opt/zeek/share/zeek/site/modbus-features.zeek
+COPY zeek/zeekctl.cfg /opt/zeek/etc/zeekctl.cfg
+COPY zeek/node.cfg.tpl /opt/zeek/etc/node.cfg.tpl
+COPY suricata/suricata.yaml /etc/suricata/suricata.yaml
+COPY suricata/rules/ /opt/lab/vm-sec/suricata/rules/
+COPY ntopng/ntopng.conf /opt/lab/vm-sec/ntopng/ntopng.conf
+COPY log_shipper/ /opt/lab/log_shipper/
+COPY vuln/ /opt/lab/vm-sec/vuln/
+
+# Ensure scripts are executable
+RUN chmod 0755 /opt/lab/vm-sec/vuln/*.py
+
+# Set up entrypoint
+COPY entrypoint_sec.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

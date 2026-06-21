@@ -1,0 +1,167 @@
+# Stage 6 — Prometheus alerting rules for the lab.
+#
+# These rules cover Objectives 1–6 of Topic 114:
+#   Obj 1: OT/IT network and industrial protocol monitoring
+#   Obj 2: AI-driven anomaly detection
+#   Obj 3: Safety system protection and IEC 62443 compliance
+#   Obj 4: Robotic vulnerability management
+#   Obj 5: DevSecOps gate failures
+#   Obj 6: Automated incident detection and response trigger
+
+groups:
+  - name: lab_safety_alerts
+    rules:
+      - alert: SafetyStateWarning
+        expr: lab_stage3_safety_state == 1
+        for: 0m
+        labels:
+          severity: warning
+          stage: "3"
+          objective: safety_system_protection
+        annotations:
+          summary: "Safety supervisor entered WARN state"
+          description: >
+            The Stage 3 safety PLC has transitioned to WARN state.
+            An operator should review the safety interlock conditions
+            immediately. IEC 62443 SL-2 requires acknowledgment within
+            15 minutes.
+
+      - alert: SafetyStateEmergency
+        expr: lab_stage3_safety_state == 2
+        for: 0m
+        labels:
+          severity: critical
+          stage: "3"
+          objective: safety_system_protection
+        annotations:
+          summary: "EMERGENCY — safety interlock triggered"
+          description: >
+            The Stage 3 safety PLC has entered EMERGENCY state.
+            All robotic operations should be halted. This is a
+            safety-critical event requiring immediate operator response
+            per the emergency stop procedure.
+
+      - alert: SISIntegrityFail
+        expr: lab_stage3_sis_integrity == 0
+        for: 1m
+        labels:
+          severity: critical
+          stage: "3"
+          objective: sis_integrity
+        annotations:
+          summary: "SIS integrity check FAILED"
+          description: >
+            The Safety Instrumented System integrity sentinel register HR[11]
+            has returned an unexpected value. This may indicate tampering
+            with the safety PLC or a hardware fault. IEC 62443 requires
+            immediate investigation.
+
+  - name: lab_anomaly_alerts
+    rules:
+      - alert: AnomalyRateSpiking
+        expr: >
+          sum(rate(lab_stage2_alerts_total{category!~"none|unknown"}[5m])) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          stage: "2"
+          objective: ai_anomaly_detection
+        annotations:
+          summary: "Anomaly alert rate exceeding 0.5/s over 5 minutes"
+          description: >
+            Stage 2 AI detection is generating more than 0.5 anomaly alerts
+            per second on a 5-minute window. This sustained rate often
+            precedes incident escalation. Review iforest and pca_z scores.
+
+      - alert: HighIForestScore
+        expr: lab_stage2_latest_iforest_score > 0.2
+        for: 1m
+        labels:
+          severity: warning
+          stage: "2"
+          objective: ai_anomaly_detection
+        annotations:
+          summary: "Isolation Forest anomaly score critical (> 0.2)"
+          description: >
+            The Isolation Forest model is reporting an anomaly score above
+            the critical threshold (0.2). This indicates the current robotic
+            system behaviour deviates significantly from the trained baseline.
+
+  - name: lab_vulnerability_alerts
+    rules:
+      - alert: CriticalCVEDetected
+        expr: lab_stage4_vuln_count{severity="critical"} > 0
+        for: 0m
+        labels:
+          severity: critical
+          stage: "4"
+          objective: vulnerability_management
+        annotations:
+          summary: "Critical CVE detected in robot inventory"
+          description: >
+            Stage 4 vulnerability scanning has detected {{ $value }} critical
+            CVE(s) (CVSS ≥ 9) in the live robot or control system inventory.
+            Immediate patching is required per IEC 62443 patch management policy.
+
+      - alert: IEC62443ComplianceLow
+        expr: lab_iec62443_compliance_score < 70
+        for: 5m
+        labels:
+          severity: warning
+          stage: "6"
+          objective: iec62443_compliance
+        annotations:
+          summary: "IEC 62443 compliance score below 70%"
+          description: >
+            The derived IEC 62443 compliance score has fallen below 70
+            (current: {{ $value }}%). Contributing factors include critical CVEs,
+            configuration drift, and pending operator approvals. Review the
+            Security Posture dashboard for details.
+
+  - name: lab_incident_alerts
+    rules:
+      - alert: HighPendingApprovals
+        expr: lab_stage6_pending_approvals > 10
+        for: 5m
+        labels:
+          severity: warning
+          stage: "6"
+          objective: incident_response
+        annotations:
+          summary: "More than 10 containment steps awaiting operator approval"
+          description: >
+            Stage 6 has {{ $value }} containment actions pending human approval
+            for more than 5 minutes. This backlog may delay incident containment.
+            An additional operator should be assigned to clear the queue.
+
+      - alert: ComponentDown
+        expr: lab_component_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          stage: "all"
+          objective: platform_availability
+        annotations:
+          summary: "Platform component {{ $labels.component }} is unreachable"
+          description: >
+            The component '{{ $labels.component }}' has been unreachable
+            for over 1 minute. This may affect anomaly detection, safety
+            monitoring, or incident response capabilities.
+
+      - alert: OpenIncidents
+        expr: lab_stage6_open_incidents > 3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Multiple open IR incidents"
+          description: "{{ $value }} incidents are currently open and unresolved."
+
+      - alert: PipelineFailed
+        expr: lab_stage5_pipeline_last_verdict{verdict="FAIL"} == 1
+        for: 0s
+        labels:
+          severity: high
+        annotations:
+          summary: "DevSecOps pipeline failed"
+          description: "The Stage 5 CI/CD pipeline has failed. Review the build log."

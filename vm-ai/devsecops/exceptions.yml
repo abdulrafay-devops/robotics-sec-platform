@@ -1,0 +1,15 @@
+# Stage 5 — Vulnerability-gate exceptions.
+#
+# Add entries here only with named approver, expiry date, and a written
+# justification. Exceptions expire automatically; once `until` passes,
+# the gate refuses to suppress the finding.
+#
+# Reviewed quarterly. Every entry must be traceable to a Stage 6 risk
+# acceptance ticket.
+exceptions:
+  - cve_id: "CVE-2022-37454"
+    until: "2026-12-31"
+    approver: "lab-admin@platform.local"
+    justification: |
+      XKCP SHA-3 reference impl bug; not invoked by any lab service path.
+      Tracked for upgrade with the next Ubuntu 22.04 kernel rollover.

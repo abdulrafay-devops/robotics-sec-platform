@@ -1,0 +1,62 @@
+[
+  {
+    "id": "CVE-2021-31229",
+    "cpe": "cpe:/a:openplc:openplc_runtime:3.0",
+    "product_match": {"vendor_contains": "OpenPLC", "product_contains": "Runtime", "firmware_lt": "3.1"},
+    "cvss": 9.1,
+    "title": "OpenPLC Runtime 3.0 — webserver unauthenticated remote code execution via crafted ladder upload",
+    "url": "https://nvd.nist.gov/vuln/detail/CVE-2021-31229",
+    "source": "NVD",
+    "remediation": "Upgrade to OpenPLC Runtime 3.1+; restrict :8080 to MGMT subnet 192.168.40.0/24 (the in-container OT iptables rule in vm-ot/entrypoint_ot.sh accepts :8080 only from 192.168.40.0/24; host IT<->OT cut enforced by infra/docker-fw.sh)."
+  },
+  {
+    "id": "ICSA-23-103-09",
+    "cpe": "cpe:/a:eclipse:cyclonedds:0.10.5",
+    "product_match": {"vendor_contains": "Eclipse", "product_contains": "Cyclone", "firmware_lt": "0.10.6"},
+    "cvss": 7.5,
+    "title": "Cyclone DDS 0.10.x — discovery message parser denial-of-service",
+    "url": "https://www.cisa.gov/news-events/ics-advisories/icsa-23-103-09",
+    "source": "ICS-CERT",
+    "remediation": "Pin >=0.10.6 in ROS Humble; bias discovery to loopback (already done via vm-ot/sros2/cyclonedds.xml)."
+  },
+  {
+    "id": "CVE-2024-23653",
+    "cpe": "cpe:/a:python:pymodbus:3.6.0",
+    "product_match": {"vendor_contains": "pymodbus", "firmware_lt": "3.7.2"},
+    "cvss": 7.2,
+    "title": "pymodbus < 3.7.2 — server crash on malformed TCP framing",
+    "url": "https://github.com/pymodbus-dev/pymodbus/security/advisories",
+    "source": "GHSA",
+    "remediation": "Pin pymodbus>=3.7.2 (the lab pins 3.7.4 in vm-ai/requirements.txt and the vm-ot/vm-sec Dockerfiles)."
+  },
+  {
+    "id": "ICSA-20-105-04",
+    "cpe": "cpe:/a:rockwellautomation:micro800:fw<=15",
+    "product_match": {"vendor_contains": "Rockwell", "product_contains": "Micro8", "firmware_lt": "16.0"},
+    "cvss": 8.6,
+    "title": "Rockwell Micro800 firmware <= 15 — unauthenticated controller stop via crafted EIP packet",
+    "url": "https://www.cisa.gov/news-events/ics-advisories/icsa-20-105-04",
+    "source": "ICS-CERT",
+    "remediation": "Upgrade firmware to >= 16.0; segment EtherNet/IP (tcp/44818) to OT subnet only (already enforced)."
+  },
+  {
+    "id": "CVE-2022-37454",
+    "cpe": "cpe:/o:linuxfoundation:linux_kernel:5.15.0",
+    "product_match": {"vendor_contains": "Ubuntu", "firmware_lt": "5.15.0-91"},
+    "cvss": 7.5,
+    "title": "Linux kernel — XKCP SHA-3 reference implementation buffer overflow",
+    "url": "https://nvd.nist.gov/vuln/detail/CVE-2022-37454",
+    "source": "NVD",
+    "remediation": "apt upgrade linux-image-generic to >= 5.15.0-91; covered by unattended-upgrades policy."
+  },
+  {
+    "id": "CVE-2023-25690",
+    "cpe": "cpe:/a:apache:guacamole:1.5.0",
+    "product_match": {"vendor_contains": "Apache", "product_contains": "Guacamole", "firmware_lt": "1.5.5"},
+    "cvss": 7.5,
+    "title": "Apache Guacamole 1.5.x — open redirect via crafted ${ jexl } expressions",
+    "url": "https://nvd.nist.gov/vuln/detail/CVE-2023-25690",
+    "source": "NVD",
+    "remediation": "Upgrade to Guacamole 1.5.5+ (already pinned in docker-compose.yml)."
+  }
+]

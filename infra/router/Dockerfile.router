@@ -1,0 +1,12 @@
+# router-fw — the ONLY multi-homed container in the IDMZ design.
+# It forwards between the four zone networks and enforces a default-deny
+# firewall, so no application container needs more than one network interface.
+FROM alpine:3.20
+
+RUN apk add --no-cache nftables iproute2 bash tcpdump
+
+COPY nftables.conf /etc/nftables.conf
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

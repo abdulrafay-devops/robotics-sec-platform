@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  html, body, #root { height: 100%; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: #080c14;
+    color: #e2e8f0;
+    overflow: hidden;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #0d1420; }
+  ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #374151; }
+}
+
+@layer components {
+  .card {
+    @apply bg-bg-card border border-border-dim rounded-lg p-4;
+  }
+  .card-header {
+    @apply text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2;
+  }
+  .status-dot {
+    @apply inline-block w-2 h-2 rounded-full;
+  }
+  .stat-value {
+    @apply font-mono text-2xl font-bold;
+  }
+  .badge {
+    @apply text-xs font-mono px-2 py-0.5 rounded-full border;
+  }
+  .badge-critical {
+    @apply badge bg-red-950 border-red-700 text-red-300;
+  }
+  .badge-warning {
+    @apply badge bg-amber-950 border-amber-700 text-amber-300;
+  }
+  .badge-ok {
+    @apply badge bg-emerald-950 border-emerald-700 text-emerald-300;
+  }
+  .badge-info {
+    @apply badge bg-blue-950 border-blue-700 text-blue-300;
+  }
+  .btn {
+    @apply px-4 py-2 rounded-md text-sm font-semibold transition-all duration-150 cursor-pointer select-none;
+  }
+  .btn-primary {
+    @apply btn bg-blue-600 hover:bg-blue-500 text-white border border-blue-500;
+  }
+  .btn-danger {
+    @apply btn bg-red-700 hover:bg-red-600 text-white border border-red-500;
+  }
+  .btn-warning {
+    @apply btn bg-amber-600 hover:bg-amber-500 text-white border border-amber-500;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent hover:bg-slate-800 text-slate-300 border border-slate-700;
+  }
+  .terminal {
+    @apply font-mono text-xs bg-black rounded-md p-3 overflow-y-auto text-green-400 leading-relaxed;
+  }
+}
+
+@layer utilities {
+  .text-shadow-glow {
+    text-shadow: 0 0 8px currentColor;
+  }
+  .border-glow-green {
+    box-shadow: 0 0 0 1px rgba(16,185,129,0.35), inset 0 0 16px rgba(16,185,129,0.06);
+  }
+  .border-glow-red {
+    box-shadow: 0 0 0 1px rgba(239,68,68,0.45), inset 0 0 16px rgba(239,68,68,0.08);
+  }
+  .border-glow-amber {
+    box-shadow: 0 0 0 1px rgba(245,158,11,0.45), inset 0 0 16px rgba(245,158,11,0.08);
+  }
+  .border-glow-cyan {
+    box-shadow: 0 0 0 1px rgba(6,182,212,0.45), inset 0 0 16px rgba(6,182,212,0.08);
+  }
+  
+  /* 3D SCADA Bulbs styling */
+  .scada-bulb {
+    @apply w-12 h-12 rounded-full border-2 border-slate-700 bg-slate-800/80 relative flex items-center justify-center font-mono font-bold text-[10px] select-none transition-all duration-300;
+    box-shadow: inset 0 4px 8px rgba(0,0,0,0.6), 0 1px 1px rgba(255,255,255,0.1);
+  }
+  .scada-bulb-on-green {
+    @apply border-emerald-500 text-emerald-300 bg-gradient-to-b from-emerald-500/30 to-emerald-950/80;
+    box-shadow: inset 0 2px 4px rgba(255,255,255,0.2), 0 0 15px rgba(16,185,129,0.65), 0 0 5px rgba(16,185,129,0.3);
+    text-shadow: 0 0 4px rgba(16,185,129,0.8);
+  }
+  .scada-bulb-on-red {
+    @apply border-red-500 text-red-300 bg-gradient-to-b from-red-500/30 to-red-950/80;
+    box-shadow: inset 0 2px 4px rgba(255,255,255,0.2), 0 0 15px rgba(239,68,68,0.65), 0 0 5px rgba(239,68,68,0.3);
+    text-shadow: 0 0 4px rgba(239,68,68,0.8);
+  }
+  .scada-bulb-on-amber {
+    @apply border-amber-500 text-amber-300 bg-gradient-to-b from-amber-500/30 to-amber-950/80;
+    box-shadow: inset 0 2px 4px rgba(255,255,255,0.2), 0 0 15px rgba(245,158,11,0.65), 0 0 5px rgba(245,158,11,0.3);
+    text-shadow: 0 0 4px rgba(245,158,11,0.8);
+  }
+  .scada-bulb-off {
+    @apply border-slate-700 text-slate-600 bg-gradient-to-b from-slate-800/40 to-slate-950/80;
+  }
+  
+  /* Console logs coloring */
+  .log-info {
+    @apply text-cyan-400/90;
+  }
+  .log-warn {
+    @apply text-amber-400/90;
+  }
+  .log-error {
+    @apply text-red-400/95 font-bold;
+  }
+  .log-debug {
+    @apply text-slate-500;
+  }
+}
+
+/* Animated data-flow dashes on SVG paths */
+.flow-path {
+  stroke-dasharray: 8 4;
+  animation: flow-dash 1.2s linear infinite;
+}
+@keyframes flow-dash {
+  to { stroke-dashoffset: -12; }
+}
+
+/* Pulsing ring for active indicators */
+@keyframes ring-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(1.5); }
+}
+.ring-pulse { animation: ring-pulse 1.8s ease-in-out infinite; }
+
+/* Breathing threat glow for alerts */
+@keyframes threat-breath {
+  0%, 100% { box-shadow: 0 0 8px rgba(239,68,68,0.15); }
+  50%       { box-shadow: 0 0 24px rgba(239,68,68,0.45); }
+}
+.threat-glow-critical { animation: threat-breath 2.5s ease-in-out infinite; }
+
+/* Score gauge fill animation */
+@keyframes gauge-fill {
+  from { stroke-dashoffset: 440; }
+}
+.gauge-arc { animation: gauge-fill 1s ease-out forwards; }
+
+/* Slide-in for new alert rows */
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.alert-row { animation: slide-in 0.25s ease-out; }
+

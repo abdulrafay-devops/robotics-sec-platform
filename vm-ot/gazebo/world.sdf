@@ -1,0 +1,550 @@
+<?xml version="1.0" ?>
+<!--
+    Lab world — Intelligent Industrial Robotics Security Platform v2.
+
+    Scene: factory robot cell with 6-DoF arm, conveyor with table legs,
+    full safety fence with horizontal rails, robot mounting pedestal,
+    control cabinet, E-stop panel, network tap, work pieces.
+
+    Lighting: key sun + fill light + overhead spot for depth and shadow.
+    Cast shadows enabled for photorealism in operator demos.
+-->
+<sdf version="1.7">
+  <world name="lab_cell">
+
+    <!-- ── physics ──────────────────────────────────────────── -->
+    <!-- ODE is Gazebo Classic's native engine. Bullet was swapped out because
+         btHingeConstraint cannot be created between kinematic (gravity=false)
+         links, which caused all arm joints to fail silently and the arm to
+         disappear. ODE handles per-link gravity=false correctly. -->
+    <physics name="ode_step" type="ode">
+      <max_step_size>0.008</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>120</real_time_update_rate>
+      <ode>
+        <solver>
+          <type>quick</type>
+          <iters>50</iters>
+          <sor>1.3</sor>
+        </solver>
+        <constraints>
+          <cfm>0</cfm>
+          <erp>0.2</erp>
+          <contact_max_correcting_vel>100</contact_max_correcting_vel>
+          <contact_surface_layer>0.001</contact_surface_layer>
+        </constraints>
+      </ode>
+    </physics>
+    <gravity>0 0 -9.81</gravity>
+
+    <!-- ── ground ──────────────────────────────────────────── -->
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+
+    <!-- ── LIGHTING ─────────────────────────────────────────── -->
+    <!-- Key sun: warm, angled, casts shadows for depth -->
+    <light type="directional" name="sun_key">
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.95 0.92 0.85 1</diffuse>
+      <specular>0.35 0.32 0.28 1</specular>
+      <cast_shadows>true</cast_shadows>
+      <direction>-0.6 0.2 -0.75</direction>
+      <attenuation><range>1000</range><constant>0.9</constant><linear>0.01</linear><quadratic>0.001</quadratic></attenuation>
+    </light>
+
+    <!-- Fill light: cool blue-grey from opposite side, softens harsh shadows -->
+    <light type="directional" name="fill_cool">
+      <pose>0 0 8 0 0 0</pose>
+      <diffuse>0.35 0.40 0.55 1</diffuse>
+      <specular>0.05 0.05 0.10 1</specular>
+      <cast_shadows>false</cast_shadows>
+      <direction>0.5 -0.3 -0.8</direction>
+    </light>
+
+    <!-- Overhead spot: simulates factory ceiling light above robot cell -->
+    <light type="point" name="cell_overhead">
+      <pose>0 0 3.5 0 0 0</pose>
+      <diffuse>0.80 0.85 0.90 1</diffuse>
+      <specular>0.20 0.22 0.25 1</specular>
+      <cast_shadows>false</cast_shadows>
+      <attenuation>
+        <range>6.0</range>
+        <constant>0.5</constant>
+        <linear>0.12</linear>
+        <quadratic>0.04</quadratic>
+      </attenuation>
+    </light>
+
+    <!-- ── ROBOT MOUNTING PEDESTAL ──────────────────────────── -->
+    <!-- Steel pedestal: robot base_link sits on top of this -->
+    <model name="00_robot_pedestal">
+      <static>true</static>
+      <pose>0 0 0 0 0 0</pose>
+      <link name="ped_body">
+        <visual name="v">
+          <geometry><box><size>0.30 0.30 0.02</size></box></geometry>
+          <material>
+            <ambient>0.15 0.16 0.18 1</ambient>
+            <diffuse>0.20 0.22 0.25 1</diffuse>
+            <specular>0.40 0.40 0.42 1</specular>
+          </material>
+        </visual>
+        <collision name="c">
+          <geometry><box><size>0.30 0.30 0.02</size></box></geometry>
+        </collision>
+        <pose>0 0 -0.01 0 0 0</pose>
+      </link>
+      <!-- anchor bolts (decorative, 4 corners) -->
+      <link name="bolt_fl"><pose> 0.11  0.11 0.005 0 0 0</pose>
+        <visual name="v"><geometry><cylinder><radius>0.010</radius><length>0.01</length></cylinder></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
+      </link>
+      <link name="bolt_fr"><pose> 0.11 -0.11 0.005 0 0 0</pose>
+        <visual name="v"><geometry><cylinder><radius>0.010</radius><length>0.01</length></cylinder></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
+      </link>
+      <link name="bolt_bl"><pose>-0.11  0.11 0.005 0 0 0</pose>
+        <visual name="v"><geometry><cylinder><radius>0.010</radius><length>0.01</length></cylinder></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
+      </link>
+      <link name="bolt_br"><pose>-0.11 -0.11 0.005 0 0 0</pose>
+        <visual name="v"><geometry><cylinder><radius>0.010</radius><length>0.01</length></cylinder></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ── CONVEYOR BELT WITH TABLE LEGS ────────────────────── -->
+    <!-- Conveyor runs NORTH (+Y). Centre at Y=+1.0. Belt 0.50m E-W x 1.5m N-S. -->
+    <model name="01_conveyor_belt">
+      <static>true</static>
+      <pose>0 1.0 0.5 0 0 0</pose>
+      <link name="belt_surface">
+        <visual name="v">
+          <geometry><box><size>0.50 1.5 0.04</size></box></geometry>
+          <material>
+            <ambient>0.16 0.19 0.21 1</ambient>
+            <diffuse>0.20 0.24 0.27 1</diffuse>
+            <specular>0.25 0.25 0.28 1</specular>
+          </material>
+        </visual>
+        <collision name="c">
+          <geometry><box><size>0.50 1.5 0.04</size></box></geometry>
+        </collision>
+      </link>
+      <!-- belt roller north end (Y=+0.73 local) — cylinder spans E-W -->
+      <link name="roller_north">
+        <pose>0 0.73 0 0 1.5708 0</pose>
+        <visual name="v">
+          <geometry><cylinder><radius>0.025</radius><length>0.50</length></cylinder></geometry>
+          <material><ambient>0.45 0.45 0.45 1</ambient><diffuse>0.55 0.55 0.55 1</diffuse></material>
+        </visual>
+      </link>
+      <!-- belt roller south end (Y=-0.73 local) -->
+      <link name="roller_south">
+        <pose>0 -0.73 0 0 1.5708 0</pose>
+        <visual name="v">
+          <geometry><cylinder><radius>0.025</radius><length>0.50</length></cylinder></geometry>
+          <material><ambient>0.45 0.45 0.45 1</ambient><diffuse>0.55 0.55 0.55 1</diffuse></material>
+        </visual>
+      </link>
+      <!-- East guard rail -->
+      <link name="guard_e">
+        <pose>0.26 0 0.04 0 0 0</pose>
+        <visual name="v">
+          <geometry><box><size>0.02 1.5 0.08</size></box></geometry>
+          <material><ambient>0.60 0.62 0.65 1</ambient><diffuse>0.65 0.67 0.70 1</diffuse></material>
+        </visual>
+      </link>
+      <!-- West guard rail -->
+      <link name="guard_w">
+        <pose>-0.26 0 0.04 0 0 0</pose>
+        <visual name="v">
+          <geometry><box><size>0.02 1.5 0.08</size></box></geometry>
+          <material><ambient>0.60 0.62 0.65 1</ambient><diffuse>0.65 0.67 0.70 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Conveyor support legs — centred at Y=+1.0, legs offset in N/S, E/W -->
+    <model name="01b_conveyor_legs">
+      <static>true</static>
+      <pose>0 1.0 0 0 0 0</pose>
+      <link name="leg_ne"><pose> 0.20  0.65 0.24 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.04 0.04 0.48</size></box></geometry>
+          <material><ambient>0.35 0.36 0.38 1</ambient><diffuse>0.42 0.43 0.45 1</diffuse></material></visual>
+        <collision name="c"><geometry><box><size>0.04 0.04 0.48</size></box></geometry></collision>
+      </link>
+      <link name="leg_nw"><pose>-0.20  0.65 0.24 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.04 0.04 0.48</size></box></geometry>
+          <material><ambient>0.35 0.36 0.38 1</ambient><diffuse>0.42 0.43 0.45 1</diffuse></material></visual>
+        <collision name="c"><geometry><box><size>0.04 0.04 0.48</size></box></geometry></collision>
+      </link>
+      <link name="leg_se"><pose> 0.20 -0.65 0.24 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.04 0.04 0.48</size></box></geometry>
+          <material><ambient>0.35 0.36 0.38 1</ambient><diffuse>0.42 0.43 0.45 1</diffuse></material></visual>
+        <collision name="c"><geometry><box><size>0.04 0.04 0.48</size></box></geometry></collision>
+      </link>
+      <link name="leg_sw"><pose>-0.20 -0.65 0.24 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.04 0.04 0.48</size></box></geometry>
+          <material><ambient>0.35 0.36 0.38 1</ambient><diffuse>0.42 0.43 0.45 1</diffuse></material></visual>
+        <collision name="c"><geometry><box><size>0.04 0.04 0.48</size></box></geometry></collision>
+      </link>
+    </model>
+
+    <!-- ── PICK ZONE — bright green marker (South, Y=+0.62) ─── -->
+    <model name="02_pick_zone_green">
+      <static>true</static>
+      <pose>0 0.62 0.525 0 0 0</pose>
+      <link name="link">
+        <visual name="v">
+          <geometry><box><size>0.28 0.28 0.02</size></box></geometry>
+          <material>
+            <ambient>0.00 0.60 0.20 1</ambient>
+            <diffuse>0.00 0.88 0.30 1</diffuse>
+            <emissive>0.00 0.12 0.04 1</emissive>
+          </material>
+        </visual>
+        <collision name="c"><geometry><box><size>0.28 0.28 0.02</size></box></geometry></collision>
+      </link>
+    </model>
+
+    <!-- Work piece sitting on pick zone (North, Y=+1.45) — what the arm picks -->
+    <model name="02b_work_piece">
+      <static>true</static>
+      <pose>0 1.45 0.565 0 0 0</pose>
+      <link name="link">
+        <visual name="v">
+          <geometry><box><size>0.08 0.08 0.06</size></box></geometry>
+          <material>
+            <ambient>0.65 0.55 0.05 1</ambient>
+            <diffuse>0.85 0.72 0.08 1</diffuse>
+            <specular>0.30 0.26 0.05 1</specular>
+          </material>
+        </visual>
+        <collision name="c"><geometry><box><size>0.08 0.08 0.06</size></box></geometry></collision>
+        <inertial><mass value="0.1"/><inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/></inertial>
+      </link>
+    </model>
+
+    <!-- ── DROP BIN (South, Y=-0.62) ─────────────────────────── -->
+    <!-- Drop bin — orange walls, open top -->
+    <model name="03_drop_bin">
+      <static>true</static>
+      <pose>0 -0.62 0 0 0 0</pose>
+      <!-- bin floor -->
+      <link name="floor">
+        <pose>0 0 0.46 0 0 0</pose>
+        <visual name="v">
+          <geometry><box><size>0.34 0.34 0.02</size></box></geometry>
+          <material><ambient>0.55 0.20 0.00 1</ambient><diffuse>0.70 0.28 0.00 1</diffuse></material>
+        </visual>
+        <collision name="c"><geometry><box><size>0.34 0.34 0.02</size></box></geometry></collision>
+      </link>
+      <!-- bin walls -->
+      <link name="wall_f"><pose> 0.17 0 0.53 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.02 0.34 0.16</size></box></geometry>
+          <material><ambient>0.55 0.20 0.00 1</ambient><diffuse>0.70 0.28 0.00 1</diffuse></material></visual>
+        <collision name="c"><geometry><box><size>0.02 0.34 0.16</size></box></geometry></collision>
+      </link>
+      <link name="wall_b"><pose>-0.17 0 0.53 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.02 0.34 0.16</size></box></geometry>
+          <material><ambient>0.55 0.20 0.00 1</ambient><diffuse>0.70 0.28 0.00 1</diffuse></material></visual>
+        <collision name="c"><geometry><box><size>0.02 0.34 0.16</size></box></geometry></collision>
+      </link>
+      <link name="wall_l"><pose>0  0.17 0.53 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.34 0.02 0.16</size></box></geometry>
+          <material><ambient>0.55 0.20 0.00 1</ambient><diffuse>0.70 0.28 0.00 1</diffuse></material></visual>
+        <collision name="c"><geometry><box><size>0.34 0.02 0.16</size></box></geometry></collision>
+      </link>
+      <link name="wall_r"><pose>0 -0.17 0.53 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.34 0.02 0.16</size></box></geometry>
+          <material><ambient>0.55 0.20 0.00 1</ambient><diffuse>0.70 0.28 0.00 1</diffuse></material></visual>
+        <collision name="c"><geometry><box><size>0.34 0.02 0.16</size></box></geometry></collision>
+      </link>
+      <!-- bin legs -->
+      <link name="leg_fl"><pose> 0.14  0.14 0.23 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.03 0.03 0.46</size></box></geometry>
+          <material><ambient>0.35 0.35 0.35 1</ambient><diffuse>0.45 0.45 0.45 1</diffuse></material></visual>
+      </link>
+      <link name="leg_fr"><pose> 0.14 -0.14 0.23 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.03 0.03 0.46</size></box></geometry>
+          <material><ambient>0.35 0.35 0.35 1</ambient><diffuse>0.45 0.45 0.45 1</diffuse></material></visual>
+      </link>
+      <link name="leg_bl"><pose>-0.14  0.14 0.23 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.03 0.03 0.46</size></box></geometry>
+          <material><ambient>0.35 0.35 0.35 1</ambient><diffuse>0.45 0.45 0.45 1</diffuse></material></visual>
+      </link>
+      <link name="leg_br"><pose>-0.14 -0.14 0.23 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.03 0.03 0.46</size></box></geometry>
+          <material><ambient>0.35 0.35 0.35 1</ambient><diffuse>0.45 0.45 0.45 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ── SAFETY ENVELOPE FLOOR MARKING (N-S layout) ────────── -->
+    <model name="04_safety_floor_marking">
+      <static>true</static>
+      <pose>0 0.35 0.003 0 0 0</pose>
+      <link name="link">
+        <visual name="v">
+          <geometry><box><size>1.6 2.4 0.003</size></box></geometry>
+          <material>
+            <ambient>0.70 0.04 0.04 0.20</ambient>
+            <diffuse>0.85 0.04 0.04 0.20</diffuse>
+            <transparency>0.78</transparency>
+          </material>
+        </visual>
+        <collision name="c"><geometry><box><size>1.6 2.4 0.003</size></box></geometry></collision>
+      </link>
+    </model>
+
+    <!-- ── SAFETY FENCE (N-S layout, 90° rotated) ──────────────── -->
+    <!-- Conveyor enters from NORTH (Y=+1.20), so North side is OPEN.           -->
+    <!-- South side (Y=-1.20) is closed.  East (X=+0.78) and West (X=-0.78)    -->
+    <!-- have full rails with mid-posts.                                         -->
+    <model name="05_safety_fence">
+      <static>true</static>
+      <pose>0 0 0 0 0 0</pose>
+
+      <!-- Corner posts: 4 corners + 2 mid-posts on East/West sides -->
+      <link name="post_ne">  <pose> 0.78  1.20 0.50 0 0 0</pose>
+        <visual name="v"><geometry><cylinder><radius>0.028</radius><length>1.00</length></cylinder></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+        <collision name="c"><geometry><cylinder><radius>0.028</radius><length>1.00</length></cylinder></geometry></collision>
+      </link>
+      <link name="post_nw">  <pose>-0.78  1.20 0.50 0 0 0</pose>
+        <visual name="v"><geometry><cylinder><radius>0.028</radius><length>1.00</length></cylinder></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+        <collision name="c"><geometry><cylinder><radius>0.028</radius><length>1.00</length></cylinder></geometry></collision>
+      </link>
+      <link name="post_se">  <pose> 0.78 -1.20 0.50 0 0 0</pose>
+        <visual name="v"><geometry><cylinder><radius>0.028</radius><length>1.00</length></cylinder></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+        <collision name="c"><geometry><cylinder><radius>0.028</radius><length>1.00</length></cylinder></geometry></collision>
+      </link>
+      <link name="post_sw">  <pose>-0.78 -1.20 0.50 0 0 0</pose>
+        <visual name="v"><geometry><cylinder><radius>0.028</radius><length>1.00</length></cylinder></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+        <collision name="c"><geometry><cylinder><radius>0.028</radius><length>1.00</length></cylinder></geometry></collision>
+      </link>
+      <!-- Mid-posts on East and West sides -->
+      <link name="post_em">  <pose> 0.78  0.00 0.50 0 0 0</pose>
+        <visual name="v"><geometry><cylinder><radius>0.028</radius><length>1.00</length></cylinder></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+        <collision name="c"><geometry><cylinder><radius>0.028</radius><length>1.00</length></cylinder></geometry></collision>
+      </link>
+      <link name="post_wm">  <pose>-0.78  0.00 0.50 0 0 0</pose>
+        <visual name="v"><geometry><cylinder><radius>0.028</radius><length>1.00</length></cylinder></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+        <collision name="c"><geometry><cylinder><radius>0.028</radius><length>1.00</length></cylinder></geometry></collision>
+      </link>
+
+      <!-- East fence rails (x=+0.78) — N half and S half, each 1.20 m long N-S -->
+      <link name="rail_en_top"><pose> 0.78  0.60 0.93 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.022 1.20 0.022</size></box></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+      </link>
+      <link name="rail_en_mid"><pose> 0.78  0.60 0.55 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.022 1.20 0.022</size></box></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+      </link>
+      <link name="rail_es_top"><pose> 0.78 -0.60 0.93 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.022 1.20 0.022</size></box></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+      </link>
+      <link name="rail_es_mid"><pose> 0.78 -0.60 0.55 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.022 1.20 0.022</size></box></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+      </link>
+
+      <!-- West fence rails (x=-0.78) -->
+      <link name="rail_wn_top"><pose>-0.78  0.60 0.93 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.022 1.20 0.022</size></box></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+      </link>
+      <link name="rail_wn_mid"><pose>-0.78  0.60 0.55 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.022 1.20 0.022</size></box></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+      </link>
+      <link name="rail_ws_top"><pose>-0.78 -0.60 0.93 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.022 1.20 0.022</size></box></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+      </link>
+      <link name="rail_ws_mid"><pose>-0.78 -0.60 0.55 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.022 1.20 0.022</size></box></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+      </link>
+
+      <!-- South fence rail (y=-1.20) — full span E-W, closes the South side -->
+      <link name="rail_south_top"> <pose>0 -1.20 0.93 0 0 0</pose>
+        <visual name="v"><geometry><box><size>1.56 0.022 0.022</size></box></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+      </link>
+      <link name="rail_south_mid"> <pose>0 -1.20 0.55 0 0 0</pose>
+        <visual name="v"><geometry><box><size>1.56 0.022 0.022</size></box></geometry>
+          <material><ambient>0.90 0.75 0.00 1</ambient><diffuse>1.00 0.82 0.00 1</diffuse></material></visual>
+      </link>
+      <!-- North side is OPEN — conveyor belt passes through here -->
+    </model>
+
+    <!-- ── CONTROL CABINET ───────────────────────────────────── -->
+    <!-- Robot controller enclosure — grey box, off to the side -->
+    <model name="07_control_cabinet">
+      <static>true</static>
+      <pose>-1.05 -0.85 0 0 0 0.52</pose>
+      <link name="cabinet_body">
+        <pose>0 0 0.58 0 0 0</pose>
+        <visual name="v">
+          <geometry><box><size>0.45 0.30 1.16</size></box></geometry>
+          <material>
+            <ambient>0.22 0.24 0.26 1</ambient>
+            <diffuse>0.28 0.30 0.33 1</diffuse>
+            <specular>0.15 0.15 0.16 1</specular>
+          </material>
+        </visual>
+        <collision name="c"><geometry><box><size>0.45 0.30 1.16</size></box></geometry></collision>
+      </link>
+      <!-- cabinet door panel (slightly lighter) -->
+      <link name="cabinet_door">
+        <pose>0.225 0 0.58 0 0 0</pose>
+        <visual name="v">
+          <geometry><box><size>0.005 0.26 1.06</size></box></geometry>
+          <material>
+            <ambient>0.35 0.38 0.42 1</ambient>
+            <diffuse>0.40 0.44 0.48 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <!-- status LEDs row -->
+      <link name="led_green">
+        <pose>0.228  0.05 0.90 0 0 0</pose>
+        <visual name="v"><geometry><cylinder><radius>0.012</radius><length>0.01</length></cylinder></geometry>
+          <material><ambient>0.0 0.9 0.1 1</ambient><diffuse>0.0 1.0 0.1 1</diffuse><emissive>0.0 0.5 0.05 1</emissive></material></visual>
+      </link>
+      <link name="led_amber">
+        <pose>0.228  0.05 0.87 0 0 0</pose>
+        <visual name="v"><geometry><cylinder><radius>0.012</radius><length>0.01</length></cylinder></geometry>
+          <material><ambient>0.9 0.6 0.0 1</ambient><diffuse>1.0 0.65 0.0 1</diffuse><emissive>0.4 0.25 0.0 1</emissive></material></visual>
+      </link>
+    </model>
+
+    <!-- ── E-STOP PANEL ──────────────────────────────────────── -->
+    <!-- Emergency stop pedestal mounted at cell entrance -->
+    <model name="08_estop_panel">
+      <static>true</static>
+      <pose>-1.10 0.55 0 0 0 0</pose>
+      <!-- stand post -->
+      <link name="stand">
+        <pose>0 0 0.55 0 0 0</pose>
+        <visual name="v"><geometry><cylinder><radius>0.022</radius><length>1.10</length></cylinder></geometry>
+          <material><ambient>0.30 0.30 0.30 1</ambient><diffuse>0.40 0.40 0.40 1</diffuse></material></visual>
+        <collision name="c"><geometry><cylinder><radius>0.022</radius><length>1.10</length></cylinder></geometry></collision>
+      </link>
+      <!-- panel box -->
+      <link name="panel">
+        <pose>0 0 1.08 0 0 0</pose>
+        <visual name="v"><geometry><box><size>0.14 0.10 0.12</size></box></geometry>
+          <material><ambient>0.70 0.08 0.04 1</ambient><diffuse>0.88 0.10 0.05 1</diffuse></material></visual>
+        <collision name="c"><geometry><box><size>0.14 0.10 0.12</size></box></geometry></collision>
+      </link>
+      <!-- large mushroom E-stop button -->
+      <link name="estop_button">
+        <pose>0.072 0 1.08 0 1.5708 0</pose>
+        <visual name="v"><geometry><cylinder><radius>0.028</radius><length>0.035</length></cylinder></geometry>
+          <material><ambient>0.85 0.04 0.02 1</ambient><diffuse>1.00 0.05 0.02 1</diffuse><emissive>0.40 0.01 0.00 1</emissive></material></visual>
+      </link>
+    </model>
+
+    <!-- ── NETWORK TAP (Zeek/Suricata sensor box) ────────────── -->
+    <model name="06_network_tap">
+      <static>true</static>
+      <pose>0.15 -1.00 0 0 0 0</pose>
+      <!-- sensor box body -->
+      <link name="box">
+        <pose>0 0 0.22 0 0 0</pose>
+        <visual name="v">
+          <geometry><box><size>0.38 0.16 0.20</size></box></geometry>
+          <material>
+            <ambient>0.00 0.18 0.65 1</ambient>
+            <diffuse>0.00 0.28 0.88 1</diffuse>
+            <specular>0.10 0.18 0.45 1</specular>
+          </material>
+        </visual>
+        <collision name="c"><geometry><box><size>0.38 0.16 0.20</size></box></geometry></collision>
+      </link>
+      <!-- label panel (lighter blue strip) -->
+      <link name="label">
+        <pose>0.082 0 0.26 0 0 0</pose>
+        <visual name="v">
+          <geometry><box><size>0.006 0.12 0.06</size></box></geometry>
+          <material><ambient>0.50 0.70 1.00 1</ambient><diffuse>0.60 0.80 1.00 1</diffuse></material>
+        </visual>
+      </link>
+      <!-- status LEDs -->
+      <link name="tap_led1"><pose>0.082 0.04 0.22 0 0 0</pose>
+        <visual name="v"><geometry><sphere><radius>0.008</radius></sphere></geometry>
+          <material><ambient>0.0 1.0 0.3 1</ambient><diffuse>0.0 1.0 0.3 1</diffuse><emissive>0.0 0.6 0.1 1</emissive></material></visual>
+      </link>
+      <link name="tap_led2"><pose>0.082 0.02 0.22 0 0 0</pose>
+        <visual name="v"><geometry><sphere><radius>0.008</radius></sphere></geometry>
+          <material><ambient>1.0 0.6 0.0 1</ambient><diffuse>1.0 0.6 0.0 1</diffuse><emissive>0.5 0.3 0.0 1</emissive></material></visual>
+      </link>
+      <!-- cable (thin cylinder) connecting to cabinet -->
+      <link name="cable">
+        <pose>-0.55 -0.05 0.22 0 1.5708 0</pose>
+        <visual name="v"><geometry><cylinder><radius>0.005</radius><length>1.10</length></cylinder></geometry>
+          <material><ambient>0.10 0.10 0.10 1</ambient><diffuse>0.15 0.15 0.15 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ── FACTORY BACK WALL ─────────────────────────────────── -->
+    <model name="09_back_wall">
+      <static>true</static>
+      <pose>-2.10 0 1.0 0 0 0</pose>
+      <link name="wall">
+        <visual name="v">
+          <geometry><box><size>0.08 4.5 2.0</size></box></geometry>
+          <material>
+            <ambient>0.38 0.40 0.43 1</ambient>
+            <diffuse>0.44 0.46 0.50 1</diffuse>
+          </material>
+        </visual>
+        <collision name="c"><geometry><box><size>0.08 4.5 2.0</size></box></geometry></collision>
+      </link>
+    </model>
+
+    <!-- ── SAFETY SIGN on back wall ─────────────────────────── -->
+    <model name="09b_safety_sign">
+      <static>true</static>
+      <pose>-2.05 -0.5 1.55 0 0 0</pose>
+      <link name="sign">
+        <visual name="v">
+          <geometry><box><size>0.02 0.35 0.25</size></box></geometry>
+          <material>
+            <ambient>0.90 0.75 0.00 1</ambient>
+            <diffuse>1.00 0.82 0.00 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Robot arm spawned here by spawn_entity.py (launch.py); not embedded. -->
+
+    <!-- ── CAMERA VIEW ────────────────────────────────────────── -->
+    <!-- Angled 3/4 view from SE: shows N-S arm sweep, conveyor (North) and drop bin (South) -->
+    <gui fullscreen="0">
+      <camera name="user_camera">
+        <pose>2.20 -2.80 2.20 0 0.46 2.10</pose>
+        <clip><near>0.05</near><far>200</far></clip>
+      </camera>
+    </gui>
+
+    <!-- ROS 2 State Plugin to expose SetModelConfiguration service -->
+    <plugin name="gazebo_ros_state" filename="libgazebo_ros_state.so">
+      <ros>
+        <namespace>/gazebo</namespace>
+      </ros>
+    </plugin>
+
+  </world>
+</sdf>

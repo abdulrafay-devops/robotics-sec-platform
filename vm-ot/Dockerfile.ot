@@ -1,0 +1,79 @@
+FROM ros:humble-ros-base
+
+# Prevent interactive prompts during apt install
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install dependencies for building OpenPLC and running Python scripts
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential autoconf automake libtool flex bison \
+    pkg-config make cmake sqlite3 libssl-dev \
+    python3-pip python3-venv python3-pymodbus \
+    curl git rsync iproute2 iputils-ping net-tools tcpdump iptables \
+    dbus-x11 sudo xauth x11-xserver-utils mesa-utils \
+    xfce4 xfce4-terminal xrdp xorgxrdp xserver-xorg-core \
+    ros-humble-rmw-cyclonedds-cpp \
+    ros-humble-gazebo-ros-pkgs ros-humble-robot-state-publisher \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up paths and virtual environment
+WORKDIR /opt/lab
+RUN python3 -m venv venv-traffic && \
+    venv-traffic/bin/pip install --upgrade pip wheel && \
+    venv-traffic/bin/pip install \
+    'pymodbus[serial]==3.7.4' \
+    'scapy==2.5.0' \
+    'pyyaml==6.0.2' \
+    'pytest==8.3.3'
+
+# Clone and install OpenPLC
+RUN git clone --depth 1 https://github.com/thiagoralves/OpenPLC_v3.git openplc && \
+    cd openplc && \
+    ./install.sh linux
+
+# Create necessary directories
+RUN mkdir -p /var/lab/log /var/lab/state /opt/lab/vm-ot/sros2 /opt/lab/vm-ot/gazebo /opt/lab/vm-ot/traffic /opt/lab/bin
+
+# GUI user used only through Apache Guacamole -> RDP.
+RUN useradd -m -s /bin/bash lab && \
+    echo 'lab:lab2026' | chpasswd && \
+    usermod -aG sudo,ssl-cert lab && \
+    echo 'lab ALL=(ALL) NOPASSWD: /opt/lab/bin/start-gazebo-gui.sh' > /etc/sudoers.d/lab-gazebo && \
+    chmod 0440 /etc/sudoers.d/lab-gazebo && \
+    echo 'startxfce4' > /home/lab/.xsession && \
+    mkdir -p /home/lab/Desktop /home/lab/.config/autostart && \
+    chown -R lab:lab /home/lab
+
+# Copy scripts and configurations
+COPY sros2/ /opt/lab/vm-ot/sros2/
+COPY gazebo/ /opt/lab/vm-ot/gazebo/
+COPY traffic/ /opt/lab/vm-ot/traffic/
+COPY openplc/production.st /opt/lab/openplc/webserver/st_files/production.st
+
+RUN chmod +x /opt/lab/vm-ot/gazebo/start_gazebo_gui.sh \
+    /opt/lab/vm-ot/gazebo/joint_state_to_gazebo.py && \
+    ln -sf /opt/lab/vm-ot/gazebo/start_gazebo_gui.sh /opt/lab/bin/start-gazebo-gui.sh && \
+    printf '%s\n' \
+      '[Desktop Entry]' \
+      'Type=Application' \
+      'Name=Gazebo Lab Cell' \
+      'Comment=Open the industrial robot Gazebo GUI' \
+      'Exec=/opt/lab/bin/start-gazebo-gui.sh' \
+      'Terminal=false' \
+      'Categories=Development;Robotics;' \
+      > /home/lab/Desktop/gazebo-lab-cell.desktop && \
+    cp /home/lab/Desktop/gazebo-lab-cell.desktop /home/lab/.config/autostart/gazebo-lab-cell.desktop && \
+    chmod +x /home/lab/Desktop/gazebo-lab-cell.desktop /home/lab/.config/autostart/gazebo-lab-cell.desktop && \
+    chown -R lab:lab /home/lab
+
+# Compile and register production program in OpenPLC
+RUN cd /opt/lab/openplc/webserver && \
+    ./scripts/compile_program.sh production.st && \
+    echo "production.st" > active_program && \
+    sqlite3 openplc.db "INSERT OR IGNORE INTO Programs (Name, Description, File, Date_upload) VALUES ('production', 'Lab production ladder', 'production.st', strftime('%s','now'));" && \
+    sqlite3 openplc.db "UPDATE Settings SET Value='true' WHERE Key='Start_run_mode';"
+
+# Set up entrypoint
+COPY entrypoint_ot.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

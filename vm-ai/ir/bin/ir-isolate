@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Stage 6 — graded-containment / Isolate tier.
+#
+# Drops all traffic from the offending source IP at the host firewall.
+# Idempotent: the same IP can be isolated multiple times without
+# duplicate rules. Writes a journal line for the audit trail.
+set -u
+SRC=${1:?usage: ir-isolate <src_ip>}
+RULE="-s ${SRC} -j DROP"
+if iptables -C INPUT ${RULE} 2>/dev/null; then
+    echo "[ir-isolate] ${SRC} already isolated"
+    exit 0
+fi
+iptables -I INPUT 1 ${RULE}
+logger -t lab-ir "isolate src=${SRC}"
+echo "[ir-isolate] dropped ${SRC} at host firewall"

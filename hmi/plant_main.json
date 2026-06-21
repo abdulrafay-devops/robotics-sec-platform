@@ -1,0 +1,81 @@
+[
+  {
+    "screen_id": "main",
+    "requires_login": true,
+    "min_role": "operator",
+    "widgets": [
+      {
+        "type": "label",
+        "id": "lbl_title",
+        "label": "Production cell — main view"
+      },
+      {
+        "type": "indicator",
+        "id": "ind_safety_state",
+        "label": "Safety state",
+        "reads_topic": "/safety/state"
+      },
+      {
+        "type": "indicator",
+        "id": "ind_e_stop_active",
+        "label": "Emergency Stop Active",
+        "reads_register": "%QX0.5"
+      },
+      {
+        "type": "indicator",
+        "id": "ind_request_safe_state",
+        "label": "Request Safe State",
+        "reads_register": "%QX0.6"
+      },
+      {
+        "type": "indicator",
+        "id": "ind_slow_mode_active",
+        "label": "Slow/Degraded Mode Active",
+        "reads_register": "%MW4"
+      },
+      {
+        "type": "indicator",
+        "id": "ind_safety_state_val",
+        "label": "Safety State Register",
+        "reads_register": "%MW10"
+      },
+      {
+        "type": "indicator",
+        "id": "ind_last_fault_code",
+        "label": "Last Fault Code",
+        "reads_register": "%MW12"
+      },
+      {
+        "type": "button",
+        "id": "btn_start_cycle",
+        "label": "Start production cycle",
+        "writes_register": "%QX1.0",
+        "requires_role": "operator",
+        "requires_confirm": true
+      },
+      {
+        "type": "button",
+        "id": "btn_pause_cycle",
+        "label": "Pause cycle",
+        "writes_register": "%QX1.1",
+        "requires_role": "operator",
+        "requires_confirm": true
+      }
+    ]
+  },
+  {
+    "screen_id": "engineering",
+    "requires_login": true,
+    "min_role": "engineer",
+    "widgets": [
+      {
+        "type": "input",
+        "id": "in_cycle_setpoint",
+        "label": "Cycle time setpoint (s)",
+        "writes_register": "%MW0",
+        "requires_role": "engineer",
+        "requires_confirm": true
+      }
+    ]
+  }
+]

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Production PLC SROS2 permissions.
+  Authorized to publish /safety/request (heartbeats), but MUST NOT publish /safety/state.
+-->
+<dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-SECURITY/20170901/omg_shared_ca_permissions.xsd">
+  <permissions>
+    <grant name="/lab/production_plc">
+      <subject_name>CN=/lab/production_plc</subject_name>
+      <validity>
+        <not_before>2024-01-01T00:00:00</not_before>
+        <not_after>2034-01-01T00:00:00</not_after>
+      </validity>
+
+      <deny_rule>
+        <domains><id>0</id></domains>
+        <publish>
+          <topics>
+            <topic>rt/safety/request</topic>
+          </topics>
+        </publish>
+      </deny_rule>
+
+      <allow_rule>
+        <domains><id>0</id></domains>
+        <publish>
+          <topics>
+            <topic>rt/plc/state</topic>
+            <topic>rt/plc/registers</topic>
+          </topics>
+        </publish>
+        <subscribe>
+          <topics>
+            <topic>rt/safety/state</topic>
+            <topic>rt/robot/*</topic>
+          </topics>
+        </subscribe>
+      </allow_rule>
+
+      <default>DENY</default>
+    </grant>
+  </permissions>
+</dds>

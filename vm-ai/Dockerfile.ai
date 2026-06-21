@@ -1,0 +1,74 @@
+FROM ubuntu:22.04
+
+# Prevent interactive prompts during apt install
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install common utilities and python tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    gnupg2 \
+    software-properties-common \
+    build-essential \
+    pkg-config \
+    wget \
+    git \
+    rsyslog \
+    iproute2 \
+    iputils-ping \
+    net-tools \
+    python3-pip \
+    python3-venv \
+    python3-dev \
+    sqlite3 \
+    gpg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add Grafana Repository and install Grafana, Prometheus, Redis-server
+RUN curl -fsSL https://packages.grafana.com/gpg.key | gpg --dearmor -o /usr/share/keyrings/grafana.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/grafana.gpg] https://packages.grafana.com/oss/deb stable main" \
+    > /etc/apt/sources.list.d/grafana.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    prometheus \
+    prometheus-node-exporter \
+    grafana \
+    redis-server \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up paths and virtual environment
+WORKDIR /opt/lab
+RUN python3 -m venv venv-ai && \
+    venv-ai/bin/pip install --upgrade pip wheel
+
+# Copy requirements and install python dependencies
+COPY requirements.txt /opt/lab/requirements.txt
+RUN venv-ai/bin/pip install -r /opt/lab/requirements.txt
+
+# Create necessary directories
+RUN mkdir -p /opt/lab/vm-ai /opt/lab/models /opt/lab/bin /var/lab/log /var/lab/state /var/lab/ingest \
+    /var/lab/state/ir/postmortems /var/lab/evidence /var/lab/artifacts /var/lab/log/pipeline /var/lab/log/ros
+
+# Copy the AI stack files into place
+COPY alert_bridge.py /opt/lab/vm-ai/
+COPY feature_consumer.py /opt/lab/vm-ai/
+COPY score_service.py /opt/lab/vm-ai/
+COPY vendor_access.py /opt/lab/vm-ai/
+COPY requirements.txt /opt/lab/vm-ai/
+COPY devsecops/ /opt/lab/vm-ai/devsecops/
+COPY ir/ /opt/lab/vm-ai/ir/
+COPY model/ /opt/lab/vm-ai/model/
+COPY monitoring/ /opt/lab/vm-ai/monitoring/
+
+# Copy helper commands and make them executable
+RUN cp -rf /opt/lab/vm-ai/ir/bin/* /opt/lab/bin/ && \
+    chmod +x /opt/lab/bin/* && \
+    chmod +x /opt/lab/vm-ai/devsecops/*.sh /opt/lab/vm-ai/devsecops/*.py /opt/lab/vm-ai/ir/*.sh /opt/lab/vm-ai/ir/*.py
+
+# Add /opt/lab/bin to PATH
+ENV PATH="/opt/lab/bin:${PATH}"
+
+# Set up entrypoint
+COPY entrypoint_ai.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

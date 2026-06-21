@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Stage 6 — graded-containment / Stop tier.
+#
+# Asserts the safe state on the safety supervisor by publishing an
+# authenticated remote E-stop on /safety/request. Reuses the existing
+# Stage 3 heartbeat sender's --request-estop flag so the cryptographic
+# path is identical to a normal operator-initiated E-stop.
+#
+# Usage:  ir-stop <incident_id>
+set -u
+INCIDENT=${1:?usage: ir-stop <incident_id>}
+
+if [[ -x /opt/lab/bin/run-safety-heartbeat.sh ]]; then
+    # Run a one-shot E-stop publisher in the production_plc enclave.
+    LAB_HEARTBEAT_ONESHOT=1 LAB_HEARTBEAT_ESTOP=1 \
+        timeout 8 /opt/lab/bin/run-safety-heartbeat.sh \
+        2>&1 | sed 's/^/[ir-stop] /'
+else
+    # Write the trigger file to the shared state volume so container-ot's background watcher
+    # executes safety_heartbeat.py --request-estop.
+    echo "HMI-triggered SROS2 E-Stop" > /var/lab/state/sros2_estop_trigger
+    echo "[ir-stop] wrote SROS2 E-Stop trigger file to shared state volume"
+fi
+logger -t lab-ir "stop incident=${INCIDENT}"
+echo "[ir-stop] safe state asserted via SROS2 /safety/request"

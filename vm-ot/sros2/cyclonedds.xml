@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  Cyclone DDS runtime config for Stage 3 (single-VM lab).
+
+  Why this file exists:
+    All Stage 3 ROS 2 participants — the safety supervisor, the
+    safety heartbeat / E-stop client, the cyclic_motion publisher,
+    the AI subscriber and the gate tests — run inside the same VM.
+    On the Vagrant/VirtualBox NAT NIC (enp0s3), IP multicast is
+    unreliable: each participant binds to enp0s3 (10.0.2.15) but
+    multicast loopback between processes does not work, so SPDP
+    discovery silently never converges and DDS-Security
+    handshakes never start.
+
+    Switching to peer-based unicast discovery on the loopback
+    interface bypasses the broken multicast path entirely. SPDP
+    messages are sent directly to localhost on the standard DDS
+    discovery ports (7400 + 250 * domain_id + offset), every
+    participant on the host sees them, and the secure handshake
+    completes in tens of milliseconds.
+
+  Why this is acceptable security-wise:
+    Authentication, access control and crypto are all handled by
+    the SROS2 keystore (governance.xml + per-enclave
+    permissions.p7s). This file only changes the *transport* used
+    for participant discovery; it does not relax any
+    authentication or authorization policy. A multi-host
+    deployment would replace the <Peers> list with the real OT
+    peer addresses and re-enable multicast as appropriate.
+-->
+<CycloneDDS xmlns="https://cdds.io/config"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.rnc">
+  <Domain id="any">
+    <General>
+      <Interfaces>
+        <NetworkInterface name="lo" multicast="true"/>
+      </Interfaces>
+      <AllowMulticast>spdp</AllowMulticast>
+    </General>
+    <Discovery>
+      <ParticipantIndex>auto</ParticipantIndex>
+      <MaxAutoParticipantIndex>32</MaxAutoParticipantIndex>
+      <Peers>
+        <Peer Address="localhost"/>
+      </Peers>
+    </Discovery>
+  </Domain>
+</CycloneDDS>

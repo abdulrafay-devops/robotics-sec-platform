@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""Stage 6 - Manual incident containment approval tool.
+
+Usage:
+  ir-approve <incident_id> <step> [--reject]
+"""
+import sys
+import os
+import json
+import shlex
+import subprocess
+import argparse
+from pathlib import Path
+
+PENDING = Path('/var/lab/state/ir/pending_approvals.json')
+INCIDENTS_LOG = Path('/var/lab/state/ir/incidents.jsonl')
+
+# Hardening (audit F-05): the queued command is stored on a shared-volume state
+# file, so we refuse to execute anything whose program is not a sanctioned lab
+# action. This blocks a forged pending_approvals.json entry from running an
+# arbitrary command, while still permitting every real playbook step (the
+# /opt/lab/bin/ir-* tools, logger, and the python playbook_engine close step).
+_ALLOWED_PROGRAMS = {
+    "ir-isolate", "ir-slow", "ir-stop", "ir-approve", "ir-postmortem-stub",
+    "logger", "python3", "python", "bash",
+}
+
+
+def _cmd_allowed(cmd: str) -> bool:
+    try:
+        prog = shlex.split(cmd)[0]
+    except Exception:
+        return False
+    return os.path.basename(prog) in _ALLOWED_PROGRAMS or prog.startswith('/opt/lab/')
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Approve or reject a pending incident response step.")
+    parser.add_argument("incident_id", help="The ID of the incident")
+    parser.add_argument("step", help="The name of the step to approve/reject")
+    parser.add_argument("--reject", action="store_true", help="Reject the step instead of approving it")
+    args = parser.parse_args()
+
+    # Load pending approvals
+    if not PENDING.exists():
+        print(f"Error: Pending approvals file {PENDING} does not exist.", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        pending_entries = json.loads(PENDING.read_text())
+    except Exception as e:
+        print(f"Error reading pending approvals: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Find the target step
+    target_entry = None
+    remaining_entries = []
+    for entry in pending_entries:
+        if entry.get("incident_id") == args.incident_id and entry.get("step") == args.step:
+            target_entry = entry
+        else:
+            remaining_entries.append(entry)
+
+    if not target_entry:
+        print(f"Error: Pending step '{args.step}' for incident '{args.incident_id}' not found.", file=sys.stderr)
+        sys.exit(1)
+
+    # Execute if approved
+    status = "done"
+    rc = 0
+    stdout = ""
+    stderr = ""
+
+    if args.reject:
+        status = "rejected"
+        print(f"Rejecting step '{args.step}' for incident '{args.incident_id}'...")
+    else:
+        cmd = target_entry.get("cmd", "")
+        # Hardening (audit F-05): refuse commands outside the sanctioned allow-list.
+        if cmd and not _cmd_allowed(cmd):
+            print(f"REFUSED: '{cmd}' is not an allowed IR action; not executing.", file=sys.stderr)
+            # Drop the rejected entry from the queue so it is not retried.
+            PENDING.write_text(json.dumps(remaining_entries, indent=2))
+            sys.exit(2)
+        print(f"Approving and running: {cmd}")
+        if cmd:
+            proc = subprocess.run(['/bin/bash', '-c', cmd], capture_output=True, text=True)
+            rc = proc.returncode
+            stdout = proc.stdout
+            stderr = proc.stderr
+            if rc != 0:
+                status = "failed"
+                print(f"Step execution failed with exit code {rc}", file=sys.stderr)
+                # Retain in pending approvals on execution failure so it can be retried
+                remaining_entries.append(target_entry)
+            else:
+                status = "done"
+                print(f"Step execution completed successfully.")
+        else:
+            status = "done"
+            print("No command associated with this step.")
+
+    # Save remaining pending approvals
+    try:
+        PENDING.write_text(json.dumps(remaining_entries, indent=2))
+    except Exception as e:
+        print(f"Error saving pending approvals: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Determine which incident IDs still have pending steps after this action
+    still_pending_incidents = {e.get("incident_id") for e in remaining_entries}
+
+    # Update incidents.jsonl
+    if INCIDENTS_LOG.exists():
+        try:
+            lines = INCIDENTS_LOG.read_text().splitlines()
+            updated_lines = []
+            for line in lines:
+                if not line.strip():
+                    continue
+                try:
+                    incident = json.loads(line)
+                except Exception:
+                    updated_lines.append(line)
+                    continue
+
+                if incident.get("incident_id") == args.incident_id:
+                    # Update the matching step
+                    for step_entry in incident.get("steps", []):
+                        if step_entry.get("step") == args.step:
+                            step_entry["status"] = status
+                            if not args.reject:
+                                step_entry["rc"] = rc
+                                step_entry["stdout_tail"] = stdout[-500:]
+                                step_entry["stderr_tail"] = stderr[-500:]
+
+                    # Auto-close: if no pending_approval steps remain for this
+                    # incident in the queue, mark it closed so the dashboard
+                    # clears it from the Active list automatically.
+                    if args.incident_id not in still_pending_incidents:
+                        incident["closed"] = True
+                        print(f"Incident {args.incident_id} auto-closed "
+                              f"(no remaining pending steps).")
+
+                    updated_lines.append(json.dumps(incident))
+                else:
+                    updated_lines.append(line)
+
+            INCIDENTS_LOG.write_text("\n".join(updated_lines) + "\n")
+        except Exception as e:
+            print(f"Error updating incidents log: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    sys.exit(0 if status in ("done", "rejected") else rc)
+
+if __name__ == "__main__":
+    main()

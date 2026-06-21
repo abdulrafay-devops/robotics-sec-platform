@@ -1,0 +1,13 @@
+apiVersion: 1
+
+datasources:
+  - name: Lab Prometheus
+    uid: lab-prometheus
+    type: prometheus
+    access: proxy
+    url: http://localhost:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: 5s

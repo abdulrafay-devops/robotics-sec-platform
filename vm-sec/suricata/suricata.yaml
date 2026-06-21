@@ -1,0 +1,111 @@
+%YAML 1.1
+---
+# Suricata 7.x configuration for the Robotics Security Platform lab.
+#
+# Rendered by infra/provision/vm-sec.sh which substitutes:
+#   @@SPAN_OT_IF@@   = host-only NIC name on vboxnet0
+#   @@SPAN_DMZ_IF@@  = host-only NIC name on vboxnet2
+
+vars:
+  address-groups:
+    HOME_NET: "[192.168.0.0/16]"
+    EXTERNAL_NET: "!$HOME_NET"
+    OT_ZONE: "192.168.10.0/24"
+    IT_ZONE: "192.168.20.0/24"
+    DMZ_ZONE: "192.168.30.0/24"
+    MGMT_ZONE: "192.168.40.0/24"
+    MODBUS_SERVER: "192.168.10.10"
+    SAFETY_PLC: "192.168.10.11"
+    KNOWN_HMI: "192.168.40.0/24"
+
+  port-groups:
+    HTTP_PORTS: "80"
+    SHELLCODE_PORTS: "!80"
+    ORACLE_PORTS: 1521
+    SSH_PORTS: 22
+    DNP3_PORTS: 20000
+    MODBUS_PORTS: "[502,503]"
+
+default-rule-path: /etc/suricata/rules
+rule-files:
+  - suricata.rules           # ET Open ruleset (suricata-update)
+  - lab-modbus.rules         # written by infra/provision/vm-sec.sh
+
+# ---------- output (EVE JSON) ----------
+outputs:
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: /var/lab/log/suricata/eve.json
+      community-id: yes
+      community-id-seed: 0
+      types:
+        - alert:
+            metadata: yes
+            tagged-packets: yes
+            payload: no
+        - flow
+        - http
+        - tls
+        - dns
+        - stats: { enabled: yes, totals: yes, threads: yes, deltas: no }
+
+  - fast:
+      enabled: yes
+      filename: /var/lab/log/suricata/fast.log
+      append: yes
+
+  - stats:
+      enabled: yes
+      filename: /var/lab/log/suricata/stats.log
+      totals: yes
+      threads: no
+
+# ---------- per-interface settings ----------
+af-packet:
+  - interface: @@SPAN_OT_IF@@
+    cluster-id: 1
+    cluster-type: cluster_flow
+    threads: 1
+    defrag: yes
+    use-mmap: yes
+  - interface: @@SPAN_DMZ_IF@@
+    cluster-id: 2
+    cluster-type: cluster_flow
+    threads: 1
+    defrag: yes
+    use-mmap: yes
+
+# ---------- protocol parsers ----------
+app-layer:
+  protocols:
+    modbus:
+      enabled: yes
+      detection-ports:
+        dp: 502
+      stream-depth: 0
+    dnp3:
+      enabled: yes
+      detection-ports:
+        dp: 20000
+
+# ---------- detection engine ----------
+detect:
+  profile: medium
+  custom-values:
+    toclient-groups: 3
+    toserver-groups: 25
+
+threading:
+  set-cpu-affinity: no
+  detect-thread-ratio: 1.0
+
+# ---------- logging ----------
+logging:
+  default-log-level: info
+  outputs:
+    - file: { enabled: yes, filename: /var/log/suricata/suricata.log, level: info }
+
+# ---------- runtime ----------
+host-mode: auto
+runmode: workers

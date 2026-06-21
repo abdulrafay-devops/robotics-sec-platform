@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Stage 6 — graded-containment / Slow tier (ISO 10218 safety speed).
+#
+# Sets the "slow" flag (Modbus holding register 5 = 1) on the safety
+# supervisor over the Modbus admin port. Slow mode is interpreted by
+# the production PLC: motion functions multiply their commanded speed
+# by SAFETY_SPEED_FRACTION (configured 0.25 in the ladder).
+#
+# Usage:  ir-slow <incident_id>
+set -u
+INCIDENT=${1:?usage: ir-slow <incident_id>}
+HOST=${LAB_SAFETY_HOST:-192.168.40.10}
+PORT=${LAB_SAFETY_PORT:-503}
+
+# Use the python venv that ships pymodbus.
+PY=${LAB_PY:-/opt/lab/venv-traffic/bin/python}
+if [[ ! -x "${PY}" ]]; then
+    PY=/opt/lab/venv-shipper/bin/python
+fi
+if [[ ! -x "${PY}" ]]; then
+    PY=/opt/lab/venv-ai/bin/python
+fi
+if [[ ! -x "${PY}" ]]; then
+    PY=python3
+fi
+
+"${PY}" - <<EOF
+import sys, logging
+logging.basicConfig(level=logging.INFO, format='[ir-slow] %(message)s')
+try:
+    from pymodbus.client import ModbusTcpClient
+except Exception as exc:
+    print(f'[ir-slow] pymodbus missing: {exc}', file=sys.stderr); sys.exit(2)
+c = ModbusTcpClient('${HOST}', port=${PORT}, timeout=2.0)
+if not c.connect():
+    print('[ir-slow] could not connect to safety supervisor', file=sys.stderr); sys.exit(3)
+# HR[5] = 1 → "slow" command for the supervisor; the supervisor then
+# republishes /safety/state with bit-flag SLOW set, which the production
+# program consumes.
+rr = c.write_register(5, 1, slave=1)
+print(f'[ir-slow] HR[5]:=1 result={rr!r}')
+c.close()
+EOF
+logger -t lab-ir "slow incident=${INCIDENT} host=${HOST}"

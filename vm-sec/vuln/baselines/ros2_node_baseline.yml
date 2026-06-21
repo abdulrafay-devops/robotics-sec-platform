@@ -1,0 +1,48 @@
+# Stage 4 — ROS2 / SROS2 node hardening baseline.
+device_class: ros2_node
+version_pinned: ">=humble"
+
+required_settings:
+  - id: sros2_enforce_strategy
+    description: "ROS_SECURITY_STRATEGY=Enforce in the unit environment"
+    severity: critical
+    check: env_var_eq:ROS_SECURITY_STRATEGY:Enforce
+    iec62443_req: "IEC-62443-2-1:3.2.3.1"
+
+  - id: sros2_keystore_owned_by_root
+    description: "Keystore at /opt/lab/sros2_keystore must be owned by root:root, 0750"
+    severity: critical
+    check: file_mode:/opt/lab/sros2_keystore:0750:root:root
+    iec62443_req: "IEC-62443-2-1:3.2.3.1"
+
+  - id: domain_id_zero
+    description: "ROS_DOMAIN_ID must be 0 to match auto-generated governance.xml"
+    severity: high
+    check: env_var_eq:ROS_DOMAIN_ID:0
+    iec62443_req: "IEC-62443-2-1:3.2.3.1"
+
+  - id: governance_join_access_control
+    description: "governance.xml must declare enable_join_access_control=true"
+    severity: critical
+    check: xml_contains:/opt/lab/sros2_keystore/enclaves/governance.xml:enable_join_access_control>true
+    iec62443_req: "IEC-62443-2-1:3.2.3.1"
+
+  - id: governance_rtps_protection
+    description: "governance.xml rtps_protection_kind must be at least SIGN"
+    severity: high
+    check: xml_contains:/opt/lab/sros2_keystore/enclaves/governance.xml:rtps_protection_kind>SIGN
+    iec62443_req: "IEC-62443-2-1:3.2.3.1"
+
+  - id: cyclonedds_uri_pinned
+    description: "CYCLONEDDS_URI must point at the lab's /opt/lab/vm-ot/sros2/cyclonedds.xml"
+    severity: high
+    check: env_var_contains:CYCLONEDDS_URI:/opt/lab/vm-ot/sros2/cyclonedds.xml
+    iec62443_req: "IEC-62443-2-1:3.2.3.1"
+
+disallowed_settings:
+  - id: wildcard_safety_topic_permission
+    description: "permissions XMLs must NOT use <topic>rt/safety/*</topic> wildcards"
+    severity: critical
+  - id: ros_security_enable_unset
+    description: "ROS_SECURITY_ENABLE must be true on production wrappers"
+    severity: critical

@@ -1,0 +1,5 @@
+thresholds:
+  pca_threshold.json 0.09460882108552755 0.03168672397685876 4.0
+  tf_threshold.json 1.7982462024688721 0.8251300851863973 4.0
+baseline score:
+{"ts": 1782027687.2871466, "iforest_score": 0.09792007729470398, "pca_z": 0.6068014905975918, "tf_z": 0.6123781597765333, "src_ip": "192.168.10.20", "anomaly": false}152:/opt/lab/venv-shipper/bin/python /opt/lab/vm-ot/traffic/modbus_normal.py --host 192.168.10.10 --port 502 --rate-hz 1 > /var/lab/log/lab-traffic-modbus.log 2>&1 &

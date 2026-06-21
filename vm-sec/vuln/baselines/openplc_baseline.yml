@@ -1,0 +1,68 @@
+# Stage 4 — OpenPLC device-class hardening baseline.
+#
+# Read by `baseline_check.py` on a daily timer. Any required:true setting
+# that is NOT present in the live device configuration becomes a "drift"
+# entry; severity:critical drift triggers a Stage 6 incident (an audit
+# event in /var/lab/log/baseline-drift.json).
+#
+# Sources:
+#   * IEC 62443-3-3 SR 1.1, SR 1.5, SR 2.1, SR 3.2
+#   * CIS Critical Security Controls v8 — IG2
+#   * OpenPLC v3 hardening guide (community)
+device_class: openplc_runtime
+version_pinned: ">=3.1"
+
+required_settings:
+  # Authentication & access control
+  - id: webui_default_password_disabled
+    description: "Webserver default password 'openplc'/'openplc' must be changed"
+    severity: critical
+    check: webui_credentials_not_default
+    iec62443_req: "IEC-62443-2-1:3.2.3.1"
+
+  - id: webui_management_subnet_only
+    description: "Webserver tcp/8080 must be reachable only from MGMT subnet 192.168.40.0/24"
+    severity: critical
+    check: iptables_dport_8080_restricted_to_mgmt
+    iec62443_req: "IEC-62443-2-1:3.2.3.1"
+
+  # Network exposure
+  - id: modbus_isolated_to_ot
+    description: "Modbus tcp/502 must NOT be reachable from IT subnet 192.168.20.0/24"
+    severity: critical
+    check: iptables_dport_502_drops_it_zone
+    iec62443_req: "IEC-62443-2-1:3.2.3.1"
+
+  - id: safety_modbus_isolated
+    description: "Safety supervisor Modbus tcp/503 reachable only from production PLC + loopback"
+    severity: critical
+    check: iptables_dport_503_restricted
+    iec62443_req: "IEC-62443-2-1:3.2.3.1"
+
+  # Logging & monitoring
+  - id: openplc_logging_enabled
+    description: "Runtime must log program changes and I/O writes to syslog"
+    severity: high
+    check: openplc_log_to_syslog
+    iec62443_req: "IEC-62443-2-1:3.2.3.1"
+
+  - id: sros2_security_enforce
+    description: "SROS2 enclaves on this host run with ROS_SECURITY_STRATEGY=Enforce"
+    severity: critical
+    check: sros2_enforce_in_systemd_unit
+    iec62443_req: "IEC-62443-2-1:3.2.3.1"
+
+  # Integrity
+  - id: program_hash_baseline_present
+    description: "Stage 3 integrity baseline (SHA-256 of running .st) must exist"
+    severity: high
+    check: integrity_baseline_file_present
+    iec62443_req: "IEC-62443-2-1:3.2.3.1"
+
+disallowed_settings:
+  - id: anonymous_management_endpoint
+    description: "Any OPC UA endpoint with SecurityMode=None must be removed"
+    severity: critical
+  - id: default_dds_governance
+    description: "Cyclone DDS governance.xml must enable join_access_control"
+    severity: high

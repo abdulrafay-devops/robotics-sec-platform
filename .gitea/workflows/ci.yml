@@ -1,0 +1,50 @@
+name: ICS Security Gates
+# Runs the DevSecOps static code gates on every push / PR.
+# Each gate step delegates to vm-ai/devsecops/run_pipeline.sh — the SAME
+# engine the in-lab webhook path runs — selecting one gate via LAB_GATES.
+# Gate logic lives only in that script (and the linters it calls), so CI
+# and the lab pipeline cannot drift. The linters are pure-Python (stdlib
+# only), so the runner needs nothing but python3 + bash.
+# Gates 4-6 (vuln / baseline / acceptance) need live lab state and run
+# in-lab via the webhook path, not here.
+on:
+  push:
+  pull_request:
+
+jobs:
+  ics-gates:
+    runs-on: ubuntu-latest
+    env:
+      LAB_LOG_DIR: /tmp/pipeline-log
+      LAB_ARTIFACTS_DIR: /tmp/pipeline-artifacts
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Environment
+        run: python3 --version
+
+      - name: "Gate 1 - PLC Structured Text lint (safety/security rules)"
+        run: |
+          LAB_GATES=plc LAB_SOURCE_DIR="$PWD" LAB_PIPELINE_PY="$(command -v python3)" \
+            bash vm-ai/devsecops/run_pipeline.sh
+
+      - name: "Gate 2 - HMI / SCADA screen lint"
+        run: |
+          LAB_GATES=hmi LAB_SOURCE_DIR="$PWD" LAB_PIPELINE_PY="$(command -v python3)" \
+            bash vm-ai/devsecops/run_pipeline.sh
+
+      - name: "Gate 3 - SROS2 permission policy lint"
+        run: |
+          LAB_GATES=sros2 LAB_SOURCE_DIR="$PWD" LAB_PIPELINE_PY="$(command -v python3)" \
+            bash vm-ai/devsecops/run_pipeline.sh
+
+      - name: "Gate 4 - Dependency vulnerability scan (informational)"
+        # Supply-chain check on the pinned Python deps. Informational only
+        # (|| true) so a newly-disclosed CVE never blocks a build/demo; review
+        # the output and bump pins deliberately. The BLOCKING vulnerability
+        # gate (vuln_gate.py, CVSS>=7 with audited exceptions) runs in-lab
+        # where live scan state exists.
+        run: |
+          python3 -m pip install --quiet pip-audit || true
+          python3 -m pip_audit --requirement vm-ai/requirements.txt --desc || true

@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Robotics Security Platform — Level 3 SCADA Monitoring Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   Design tokens — a restrained "control-room" system (one accent, clear states)
+   ============================================================================ */
+:root{
+  --bg:#070a10;
+  --panel:rgba(255,255,255,.022);
+  --panel-2:rgba(255,255,255,.04);
+  --inset:rgba(0,0,0,.28);
+  --line:rgba(255,255,255,.07);
+  --line-strong:rgba(255,255,255,.13);
+  --txt:#e8eef6;
+  --txt-dim:#92a0b3;
+  --txt-faint:#5d6a7c;
+  --accent:#37d2e6;          /* primary: teal-cyan, used sparingly        */
+  --accent-2:#7aa2ff;        /* secondary: cool blue                      */
+  --ok:#37d39a;
+  --warn:#f6bf52;
+  --crit:#ff6b86;
+  --shadow:0 18px 50px -20px rgba(0,0,0,.7);
+  --r-card:16px; --r-tile:11px; --r-chip:7px;
+  --sp:18px;
+  --sans:'Inter',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--sans);
+  color:var(--txt);
+  background:
+    radial-gradient(1200px 600px at 12% -8%, rgba(55,210,230,.07), transparent 60%),
+    radial-gradient(1000px 600px at 100% 0%, rgba(122,162,255,.06), transparent 55%),
+    var(--bg);
+  background-attachment:fixed;
+  min-height:100vh;
+  padding:clamp(14px,2vw,26px);
+  font-size:14px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600}
+.wrap{max-width:1640px;margin:0 auto}
+
+/* ---- value change flash ---- */
+@keyframes flash{0%{background:rgba(55,210,230,.22)}100%{background:transparent}}
+.flash{animation:flash .9s ease-out}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
+
+/* ============================================================================ Top bar */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;
+  padding:14px 20px;margin-bottom:var(--sp);
+  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
+  border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--shadow);
+  backdrop-filter:blur(14px);
+}
+.brand{display:flex;align-items:center;gap:14px}
+.mark{
+  width:42px;height:42px;border-radius:11px;flex:none;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#05080d;font-weight:800;
+  box-shadow:0 0 0 1px rgba(255,255,255,.12),0 8px 22px -8px rgba(55,210,230,.7);
+}
+.mark svg{width:22px;height:22px}
+.brand h1{font-size:15.5px;font-weight:700;letter-spacing:.2px}
+.brand p{font-size:11.5px;color:var(--txt-dim);font-family:var(--mono);letter-spacing:.3px;margin-top:1px}
+.topmeta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chip{
+  display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:999px;
+  background:var(--inset);border:1px solid var(--line);font-size:12px;font-weight:500;color:var(--txt-dim);
+}
+.chip b{color:var(--txt);font-weight:600}
+.chip.ro{color:var(--accent);border-color:rgba(55,210,230,.35);background:rgba(55,210,230,.08);font-weight:600;letter-spacing:.3px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--crit);box-shadow:0 0 0 0 rgba(255,107,134,.5)}
+.dot.live{background:var(--ok);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(55,211,154,.45)}70%{box-shadow:0 0 0 7px rgba(55,211,154,0)}100%{box-shadow:0 0 0 0 rgba(55,211,154,0)}}
+
+/* ============================================================================ KPI strip */
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:var(--sp);margin-bottom:var(--sp)}
+.kpi{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r-tile);padding:14px 16px;
+  position:relative;overflow:hidden;min-width:0;
+}
+.kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);opacity:.55}
+.kpi.s-ok::before{background:var(--ok)} .kpi.s-warn::before{background:var(--warn)} .kpi.s-crit::before{background:var(--crit)}
+.kpi .k-l{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--txt-faint);font-weight:600}
+.kpi .k-v{font-size:25px;font-weight:700;font-family:var(--mono);font-variant-numeric:tabular-nums;margin-top:4px;line-height:1.05}
+.kpi .k-s{font-size:11.5px;color:var(--txt-dim);margin-top:3px}
+.k-v.ok{color:var(--ok)} .k-v.warn{color:var(--warn)} .k-v.crit{color:var(--crit)} .k-v.accent{color:var(--accent)}
+
+/* ============================================================================ grid + cards */
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:var(--sp)}
+.col-3{grid-column:span 3}.col-4{grid-column:span 4}.col-5{grid-column:span 5}
+.col-6{grid-column:span 6}.col-7{grid-column:span 7}.col-8{grid-column:span 8}.col-12{grid-column:span 12}
+.card{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r-card);padding:18px;
+  box-shadow:var(--shadow);position:relative;min-width:0;
+}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.card-h h2{font-size:13px;font-weight:650;letter-spacing:.3px;display:flex;align-items:center;gap:9px;color:var(--txt)}
+.card-h h2 svg{width:16px;height:16px;color:var(--accent);flex:none}
+.tag{font-family:var(--mono);font-size:10px;letter-spacing:.4px;text-transform:uppercase;font-weight:600;
+  padding:3px 8px;border-radius:var(--r-chip);background:rgba(122,162,255,.1);color:var(--accent-2);border:1px solid rgba(122,162,255,.2)}
+.tag.crit{background:rgba(255,107,134,.1);color:var(--crit);border-color:rgba(255,107,134,.22)}
+
+/* ---- telemetry register feed ---- */
+.tele{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tele .g-l{grid-column:1/-1;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--txt-faint);
+  font-weight:700;margin-top:4px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+.t-item{background:var(--inset);border:1px solid var(--line);border-radius:10px;padding:9px 11px;position:relative}
+.t-item.span{grid-column:1/-1}
+.t-addr{position:absolute;right:9px;top:8px;font-family:var(--mono);font-size:9.5px;color:var(--txt-faint);opacity:.8}
+.t-label{font-size:11px;color:var(--txt-dim);letter-spacing:.2px}
+.t-val{font-size:15px;font-weight:700;margin-top:2px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.io{display:flex;align-items:center;gap:8px;margin-top:3px}
+.led{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.13);flex:none;transition:.25s}
+.led.on{background:var(--accent);box-shadow:0 0 9px var(--accent)}
+.led.on.g{background:var(--ok);box-shadow:0 0 9px var(--ok)}
+.led.on.a{background:var(--warn);box-shadow:0 0 9px var(--warn)}
+.led.on.r{background:var(--crit);box-shadow:0 0 9px var(--crit)}
+.io span{font-size:12.5px;font-weight:600;color:var(--txt)}
+
+/* ---- visualizer ---- */
+.viz{background:radial-gradient(120% 100% at 50% 0%,rgba(122,162,255,.05),transparent 60%),var(--inset);
+  border:1px solid var(--line);border-radius:12px;height:330px;display:grid;place-items:center;overflow:hidden}
+.steps{display:flex;justify-content:space-between;margin-top:14px;position:relative}
+.steps::before{content:"";position:absolute;top:6px;left:4%;right:4%;height:2px;background:var(--line-strong)}
+.step{display:flex;flex-direction:column;align-items:center;gap:6px;z-index:1;flex:1}
+.step .sd{width:13px;height:13px;border-radius:50%;background:#16202e;border:2px solid var(--line-strong);transition:.3s}
+.step .sl{font-size:10px;color:var(--txt-faint);font-family:var(--mono)}
+.step.on .sd{background:var(--accent);border-color:var(--bg);box-shadow:0 0 11px var(--accent);transform:scale(1.18)}
+.step.on .sl{color:var(--accent);font-weight:600}
+.arm-link{stroke:#3a4757;stroke-width:15;stroke-linecap:round}
+.arm-glow{stroke:var(--accent);stroke-width:3.5;stroke-linecap:round;opacity:.5}
+.pivot{fill:#22303f;stroke:var(--accent);stroke-width:2}
+.belt{stroke:#2b3a4d;stroke-width:6;stroke-linecap:round}
+.belt-dash{stroke:var(--accent);stroke-width:3;stroke-dasharray:7 15;stroke-linecap:round;opacity:.7}
+.belt-dash.move{animation:belt .8s linear infinite}
+@keyframes belt{to{stroke-dashoffset:-22}}
+.cargo{fill:var(--warn);stroke:#c98a1e;stroke-width:1.4;opacity:0;transition:opacity .3s}
+.cargo.show{opacity:1}
+.claw{stroke:#6b7a8d;stroke-width:3.5;fill:none;stroke-linecap:round;transition:transform .35s}
+.jg{transition:transform .7s cubic-bezier(.4,0,.2,1)}
+
+/* ---- safety panel ---- */
+.safety-state{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:11px;border:1px solid var(--line);
+  background:var(--inset);margin-bottom:12px}
+.ss-badge{font-family:var(--mono);font-weight:700;font-size:13px;letter-spacing:.5px;padding:6px 12px;border-radius:8px}
+.ss-NORMAL{background:rgba(55,211,154,.13);color:var(--ok);border:1px solid rgba(55,211,154,.3)}
+.ss-DEGRADED{background:rgba(246,191,82,.13);color:var(--warn);border:1px solid rgba(246,191,82,.3)}
+.ss-EMERGENCY{background:rgba(255,107,134,.14);color:var(--crit);border:1px solid rgba(255,107,134,.35);animation:pulseBg 1.4s infinite}
+@keyframes pulseBg{50%{background:rgba(255,107,134,.28)}}
+.ss-meta{font-size:11.5px;color:var(--txt-dim)}
+.srow{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.srow:last-child{border-bottom:0}
+.srow .lab{color:var(--txt-dim);font-family:var(--mono);font-size:11.5px}
+
+/* ---- feeds / console ---- */
+.feed{background:var(--inset);border:1px solid var(--line);border-radius:11px;padding:10px;height:210px;overflow-y:auto;
+  display:flex;flex-direction:column;gap:7px;font-family:var(--mono);font-size:11.5px}
+.frow{padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.02);border-left:3px solid var(--line-strong)}
+.frow.crit{border-left-color:var(--crit);background:rgba(255,107,134,.05)}
+.frow.warn{border-left-color:var(--warn);background:rgba(246,191,82,.05)}
+.frow.ok{border-left-color:var(--ok);background:rgba(55,211,154,.04)}
+.frow .fh{display:flex;justify-content:space-between;gap:8px;margin-bottom:2px;font-size:10.5px}
+.fh .ip{color:var(--accent)} .fh .ts{color:var(--txt-faint)}
+.fd{color:var(--txt);word-break:break-word}
+.empty{margin:auto;color:var(--txt-faint);font-style:italic;text-align:center;font-family:var(--sans)}
+.console{background:#04070c;border:1px solid var(--line);border-radius:11px;padding:13px;height:240px;overflow-y:auto;
+  font-family:var(--mono);font-size:11.5px;line-height:1.55;color:#8ee6b0;white-space:pre-wrap;word-break:break-word}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{font-size:11px;font-weight:600;font-family:var(--sans);padding:5px 11px;border-radius:8px;cursor:pointer;
+  background:var(--inset);border:1px solid var(--line);color:var(--txt-dim);transition:.15s}
+.tab:hover{color:var(--txt);border-color:var(--line-strong)}
+.tab.on{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#05080d;border-color:transparent;font-weight:700}
+
+/* ---- register table ---- */
+.rtbl{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
+.rtbl th{position:sticky;top:0;background:#0a121c;color:var(--accent);text-align:left;padding:9px 12px;font-weight:600;
+  border-bottom:1px solid var(--line-strong);font-size:10.5px;letter-spacing:.4px;text-transform:uppercase}
+.rtbl td{padding:7px 12px;border-bottom:1px solid var(--line);color:var(--txt-dim)}
+.rtbl td.v{color:var(--txt);font-weight:600;text-align:right}
+.rtbl tr:hover td{background:rgba(255,255,255,.02)}
+.rtbl .kind{color:var(--accent-2)}
+details>summary{cursor:pointer;list-style:none;color:var(--txt-dim);font-size:12px;font-family:var(--sans)}
+details>summary::-webkit-details-marker{display:none}
+.rmap{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:12px}
+
+/* ---- mini gauge + sparkline ---- */
+.threat{display:flex;align-items:center;gap:18px}
+.gauge{position:relative;width:130px;height:84px;flex:none}
+.gauge .lvl{position:absolute;left:0;right:0;bottom:2px;text-align:center;font-family:var(--mono);font-weight:700;font-size:13px;letter-spacing:.4px}
+.spark-wrap{flex:1;min-width:0}
+.spark-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--txt-dim);margin-bottom:6px}
+canvas{display:block;width:100%;height:84px}
+
+.foot{text-align:center;color:var(--txt-faint);font-size:11px;font-family:var(--mono);letter-spacing:.4px;
+  margin-top:24px;padding-top:14px;border-top:1px solid var(--line)}
+
+/* ---- offline overlay ---- */
+.offline{position:fixed;inset:0;background:rgba(7,10,16,.78);backdrop-filter:blur(5px);display:none;
+  place-items:center;z-index:50}
+.offline.show{display:grid}
+.offline .box{background:var(--panel-2);border:1px solid var(--crit);border-radius:14px;padding:24px 30px;text-align:center;max-width:380px}
+.offline .box b{color:var(--crit);font-size:15px}
+.offline .box p{color:var(--txt-dim);font-size:12.5px;margin-top:8px}
+
+/* responsive */
+@media(max-width:1300px){.kpis{grid-template-columns:repeat(3,1fr)}.col-3,.col-4,.col-5,.col-6,.col-7,.col-8{grid-column:span 6}}
+@media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}.col-3,.col-4,.col-5,.col-6,.col-7,.col-8,.col-12{grid-column:span 12}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ===================== TOP BAR ===================== -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3l8 4v5c0 4.4-3 7.8-8 9-5-1.2-8-4.6-8-9V7l8-4z"/></svg></div>
+      <div>
+        <h1>Robotics Security Platform</h1>
+        <p>DMZ &middot; Level&nbsp;3 SCADA Monitoring Console &middot; Read-Only</p>
+      </div>
+    </div>
+    <div class="topmeta">
+      <span class="chip ro" title="This page can only read telemetry. It cannot command the PLC.">&#9679; READ-ONLY</span>
+      <span class="chip"><span id="connDot" class="dot"></span><span id="connTxt">Connecting&hellip;</span></span>
+      <span class="chip">Updated <b id="freshness">&mdash;</b></span>
+      <span class="chip mono" id="clock">--:--:-- UTC</span>
+    </div>
+  </div>
+
+  <!-- ===================== KPI STRIP ===================== -->
+  <div class="kpis">
+    <div class="kpi" id="kpiSafety"><div class="k-l">Safety State</div><div class="k-v" id="kpiSafetyV">&mdash;</div><div class="k-s" id="kpiSafetyS">SIS status</div></div>
+    <div class="kpi" id="kpiThreat"><div class="k-l">Threat Level</div><div class="k-v" id="kpiThreatV">&mdash;</div><div class="k-s" id="kpiThreatS">ML anomaly</div></div>
+    <div class="kpi"><div class="k-l">Cycle Count</div><div class="k-v accent" id="kpiCycles">0</div><div class="k-s">production cycles</div></div>
+    <div class="kpi"><div class="k-l">Last Cycle</div><div class="k-v" id="kpiLastMs">0 ms</div><div class="k-s">duration</div></div>
+    <div class="kpi" id="kpiTrips"><div class="k-l">SIS Trips</div><div class="k-v" id="kpiTripsV">0</div><div class="k-s">E-stop latches</div></div>
+    <div class="kpi"><div class="k-l">Heartbeat</div><div class="k-v" id="kpiHb">0</div><div class="k-s" id="kpiHbS">awaiting</div></div>
+  </div>
+
+  <!-- ===================== ROW 1 ===================== -->
+  <div class="grid">
+
+    <!-- Visualizer -->
+    <div class="card col-5">
+      <div class="card-h"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14 4l-4 16M6 8H4m16 8h-2M9 4H5a1 1 0 00-1 1v4m16 6v4a1 1 0 01-1 1h-4"/></svg>Live Cell &mdash; Kinematic Mirror</h2><span class="tag">SVG &middot; LIVE</span></div>
+      <div class="viz">
+        <svg id="robot" viewBox="0 0 500 330" width="100%" height="100%">
+          <defs><pattern id="g" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M22 0H0V22" fill="none" stroke="rgba(255,255,255,.025)" stroke-width="1"/></pattern></defs>
+          <rect width="100%" height="100%" fill="url(#g)"/>
+          <line class="belt" x1="24" y1="232" x2="168" y2="232"/>
+          <line id="beltDash" class="belt-dash" x1="24" y1="232" x2="168" y2="232"/>
+          <circle cx="34" cy="232" r="7" fill="#16202e" stroke="#3a4757" stroke-width="2"/>
+          <circle cx="96" cy="232" r="7" fill="#16202e" stroke="#3a4757" stroke-width="2"/>
+          <circle cx="158" cy="232" r="7" fill="#16202e" stroke="#3a4757" stroke-width="2"/>
+          <rect x="346" y="232" width="120" height="13" rx="2" fill="#22303f" stroke="#3a4757" stroke-width="2"/>
+          <rect id="boxFeed" class="cargo" x="26" y="208" width="24" height="24" rx="3"/>
+          <rect id="boxDrop" class="cargo" x="394" y="208" width="24" height="24" rx="3"/>
+          <rect x="222" y="272" width="58" height="20" rx="4" fill="#16202e" stroke="#283543" stroke-width="2"/>
+          <line x1="251" y1="272" x2="251" y2="232" stroke="#283543" stroke-width="10"/>
+          <circle class="pivot" cx="251" cy="232" r="10"/>
+          <g id="jShoulder" class="jg" transform="translate(251,232)">
+            <line class="arm-link" x1="0" y1="0" x2="0" y2="-78"/><line class="arm-glow" x1="0" y1="0" x2="0" y2="-78"/>
+            <circle class="pivot" cx="0" cy="-78" r="8"/>
+            <g id="jElbow" class="jg" transform="translate(0,-78)">
+              <line class="arm-link" x1="0" y1="0" x2="0" y2="-66"/><line class="arm-glow" x1="0" y1="0" x2="0" y2="-66"/>
+              <circle class="pivot" cx="0" cy="-66" r="6"/>
+              <g id="jWrist" class="jg" transform="translate(0,-66)">
+                <line x1="-12" y1="0" x2="12" y2="0" stroke="#3a4757" stroke-width="4" stroke-linecap="round"/>
+                <path id="clawL" class="claw" d="M-12,0 C-12,11 -5,20 -2,20"/>
+                <path id="clawR" class="claw" d="M12,0 C12,11 5,20 2,20"/>
+                <rect id="boxHeld" class="cargo" x="-10" y="6" width="20" height="20" rx="3"/>
+              </g>
+            </g>
+          </g>
+        </svg>
+      </div>
+      <div class="steps" id="steps">
+        <div class="step"><div class="sd"></div><div class="sl">S0&middot;Idle</div></div>
+        <div class="step"><div class="sd"></div><div class="sl">S1&middot;Feed</div></div>
+        <div class="step"><div class="sd"></div><div class="sl">S2&middot;Aim</div></div>
+        <div class="step"><div class="sd"></div><div class="sl">S3&middot;Clasp</div></div>
+        <div class="step"><div class="sd"></div><div class="sl">S4&middot;Swing</div></div>
+        <div class="step"><div class="sd"></div><div class="sl">S5&middot;Drop</div></div>
+        <div class="step"><div class="sd"></div><div class="sl">S6&middot;Pulse</div></div>
+      </div>
+    </div>
+
+    <!-- Telemetry -->
+    <div class="card col-4">
+      <div class="card-h"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12h4l3 8 4-16 3 8h4"/></svg>Live Telemetry</h2><span class="tag">MODBUS</span></div>
+      <div class="tele">
+        <div class="g-l">Actuators</div>
+        <div class="t-item"><span class="t-addr">%QX0.0</span><div class="t-label">Arm Drive</div><div class="io"><span id="led_arm" class="led"></span><span id="v_arm">OFF</span></div></div>
+        <div class="t-item"><span class="t-addr">%QX0.1</span><div class="t-label">Gripper</div><div class="io"><span id="led_grip" class="led"></span><span id="v_grip">OPEN</span></div></div>
+        <div class="t-item"><span class="t-addr">%QX0.2</span><div class="t-label">Conveyor</div><div class="io"><span id="led_conv" class="led"></span><span id="v_conv">OFF</span></div></div>
+        <div class="t-item"><span class="t-addr">%MW4</span><div class="t-label">Degraded Mode</div><div class="io"><span id="led_slow" class="led"></span><span id="v_slow">OFF</span></div></div>
+        <div class="g-l">Cycle</div>
+        <div class="t-item span"><span class="t-addr">%MW0</span><div class="t-label">Sequence State</div><div class="t-val accent" id="v_step">0 &middot; IDLE</div></div>
+        <div class="t-item"><span class="t-addr">%QX0.3</span><div class="t-label">Busy</div><div class="io"><span id="led_busy" class="led"></span><span id="v_busy">OFF</span></div></div>
+        <div class="t-item"><span class="t-addr">%QX0.4</span><div class="t-label">Complete</div><div class="io"><span id="led_done" class="led"></span><span id="v_done">OFF</span></div></div>
+        <div class="g-l">Console Inputs</div>
+        <div class="t-item"><span class="t-addr">%IX0.0</span><div class="t-label">Phys Start</div><div class="io"><span id="led_ps" class="led"></span><span id="v_ps">OFF</span></div></div>
+        <div class="t-item"><span class="t-addr">%IX0.1</span><div class="t-label">Phys Stop</div><div class="io"><span id="led_px" class="led"></span><span id="v_px">OFF</span></div></div>
+      </div>
+    </div>
+
+    <!-- Safety -->
+    <div class="card col-3">
+      <div class="card-h"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3l8 4v5c0 4.4-3 7.8-8 9-5-1.2-8-4.6-8-9V7l8-4z"/></svg>Safety / SIS</h2><span class="tag crit">FUNCTIONAL SAFETY</span></div>
+      <div class="safety-state">
+        <span id="ssBadge" class="ss-badge ss-NORMAL">NORMAL</span>
+        <span class="ss-meta" id="ssMeta">watchdog armed</span>
+      </div>
+      <div class="srow"><span class="lab">%QX0.5 E-Stop</span><span id="led_estop" class="led"></span></div>
+      <div class="srow"><span class="lab">%QX0.6 Safe-State</span><span id="led_safe" class="led"></span></div>
+      <div class="srow"><span class="lab">Safety code (%MW10)</span><span class="num" id="v_sstate">0</span></div>
+      <div class="srow"><span class="lab">Last fault (%MW12)</span><span class="num" id="v_fault">0 &middot; none</span></div>
+      <div class="srow"><span class="lab">SIS trips (%MW2)</span><span class="num" id="v_trips" style="color:var(--crit)">0</span></div>
+      <div class="srow"><span class="lab">Ack heartbeat (%MW11)</span><span class="num" id="v_ack">0</span></div>
+    </div>
+  </div>
+
+  <!-- ===================== ROW 2 ===================== -->
+  <div class="grid" style="margin-top:var(--sp)">
+    <div class="card col-6">
+      <div class="card-h"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 17l5-6 4 3 4-7 5 5"/></svg>ML Anomaly Trend</h2><span class="tag">ISOLATION FOREST &middot; PCA &middot; TF-AE</span></div>
+      <div class="threat">
+        <div class="gauge">
+          <svg viewBox="0 0 130 84" width="130" height="84">
+            <path d="M12 78 A53 53 0 0 1 118 78" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="11" stroke-linecap="round"/>
+            <path id="gArc" d="M12 78 A53 53 0 0 1 118 78" fill="none" stroke="#37d39a" stroke-width="11" stroke-linecap="round" stroke-dasharray="166" stroke-dashoffset="166"/>
+          </svg>
+          <div class="lvl" id="gLvl" style="color:#37d39a">NOMINAL</div>
+        </div>
+        <div class="spark-wrap">
+          <div class="spark-meta"><span>iforest score &middot; last 60 windows</span><span id="sparkNow" class="mono">0.000</span></div>
+          <canvas id="spark" width="600" height="84"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="card col-6">
+      <div class="card-h"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.3 4.3L2.6 18a2 2 0 001.7 3h15.4a2 2 0 001.7-3L13.7 4.3a2 2 0 00-3.4 0z"/></svg>IDS Anomaly Feed</h2><span class="tag crit">REAL-TIME</span></div>
+      <div class="feed" id="idsFeed"><div class="empty">Awaiting detections&hellip;</div></div>
+    </div>
+  </div>
+
+  <!-- ===================== ROW 3 ===================== -->
+  <div class="grid" style="margin-top:var(--sp)">
+    <div class="card col-6">
+      <div class="card-h"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7V5a2 2 0 012-2h12a2 2 0 012 2v2M4 7h16M4 7v12a2 2 0 002 2h12a2 2 0 002-2V7"/></svg>SCADA Event Historian</h2><span class="tag">CHANGE LOG</span></div>
+      <div class="feed" id="histFeed"><div class="empty">Recording telemetry changes&hellip;</div></div>
+    </div>
+    <div class="card col-6">
+      <div class="card-h"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"/></svg>OT Process Logs</h2>
+        <div class="tabs" id="logTabs">
+          <span class="tab on" data-svc="supervisor">Supervisor</span>
+          <span class="tab" data-svc="heartbeat">Heartbeat</span>
+          <span class="tab" data-svc="openplc">OpenPLC</span>
+          <span class="tab" data-svc="watcher">Watcher</span>
+        </div>
+      </div>
+      <pre class="console" id="console">Awaiting log stream&hellip;</pre>
+    </div>
+  </div>
+
+  <!-- ===================== ROW 4 ===================== -->
+  <div class="grid" style="margin-top:var(--sp)">
+    <div class="card col-12">
+      <div class="card-h"><h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>Live Modbus Register Map</h2></div>
+      <details>
+        <summary>&#9656; Expand full register memory map</summary>
+        <div class="rmap">
+          <table class="rtbl"><thead><tr><th>Addr</th><th>Type</th><th>ST Name</th><th>Description</th><th style="text-align:right">Value</th></tr></thead>
+          <tbody id="rtbody"></tbody></table>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <div class="foot">SECURE OT MONITORING &middot; READ-ONLY DMZ SCADA CONSOLE &middot; IEC 62443 ZONE 3.5 &middot; SROS2 AUTHENTICATED BACKEND</div>
+</div>
+
+<div class="offline" id="offline"><div class="box"><b>&#9888; Telemetry link lost</b><p>Cannot reach the scoring API through the SCADA monitoring proxy. Retrying automatically&hellip;</p></div></div>
+
+<script>
+"use strict";
+/* Read-only wall-board. Same-origin /api/* calls are proxied (key injected
+   server-side by nginx). No control endpoints are ever called. */
+const POLL = 1000, TREND = 3000, LOGS = 5000;
+const STEP_NAMES = ["IDLE","FEED","AIM","CLASP","SWING","DROP","PULSE"];
+const FAULTS = {0:"none",1:"heartbeat WD",2:"prod fault",3:"remote E-stop",4:"replay"};
+const $ = id => document.getElementById(id);
+let prev = {}, activeSvc = "supervisor", lastOkTs = 0;
+
+function setText(el,val){ if(!el) return; const s=String(val); if(el.textContent!==s){el.textContent=s;
+  el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");} }
+function setIO(ledId,valId,on,onTxt,offTxt,colour){
+  const l=$(ledId); if(l) l.className="led"+(on?" on"+(colour?" "+colour:""):"");
+  setText($(valId),on?onTxt:offTxt);
+}
+function fmtAgo(ms){ const s=Math.round((Date.now()-ms)/1000); return s<2?"just now":s+"s ago"; }
+
+setInterval(()=>{ const d=new Date(); $("clock").textContent=d.toISOString().substr(11,8)+" UTC";
+  if(lastOkTs) $("freshness").textContent=fmtAgo(lastOkTs); },1000);
+
+function setOnline(ok){
+  $("connDot").className="dot"+(ok?" live":""); $("connTxt").textContent=ok?"Live":"Offline";
+  $("offline").classList.toggle("show",!ok); }
+
+function logEvent(sev,msg){ const f=$("histFeed"); const e=f.querySelector(".empty"); if(e)f.innerHTML="";
+  const row=document.createElement("div"); row.className="frow "+(sev==="crit"?"crit":sev==="warn"?"warn":sev==="ok"?"ok":"");
+  const t=new Date().toISOString().substr(11,8);
+  row.innerHTML='<div class="fh"><span class="ip">'+(sev==="crit"?"SAFETY":sev==="ok"?"OK":sev==="warn"?"WARN":"INFO")+'</span><span class="ts">'+t+'</span></div><div class="fd">'+msg+'</div>';
+  f.insertBefore(row,f.firstChild); while(f.children.length>60)f.removeChild(f.lastChild); }
+
+function diff(key,val,label,fmt){ if(prev[key]!==undefined && prev[key]!==val){
+  const sev = key==="safety_state"?(val===2?"crit":val===1?"warn":"ok") : (key==="e_stop_active"&&val)?"crit":(key==="cycle_complete"&&val)?"ok":"info";
+  logEvent(sev, label+": "+(fmt?fmt(prev[key]):prev[key])+" → "+(fmt?fmt(val):val)); } prev[key]=val; }
+
+const POSES=[
+ {s:0,e:0,w:0,g:0,feed:0,held:0,drop:0},
+ {s:-12,e:8,w:0,g:0,feed:1,held:0,drop:0},
+ {s:-46,e:38,w:6,g:0,feed:1,held:0,drop:0},
+ {s:-46,e:38,w:6,g:1,feed:0,held:1,drop:0},
+ {s:40,e:-26,w:-8,g:1,feed:0,held:1,drop:0},
+ {s:52,e:-30,w:-6,g:0,feed:0,held:0,drop:1},
+ {s:8,e:6,w:0,g:0,feed:0,held:0,drop:1},
+];
+function renderArm(step,running){
+  const p=POSES[Math.max(0,Math.min(6,step))]||POSES[0];
+  $("jShoulder").setAttribute("transform","translate(251,232) rotate("+p.s+")");
+  $("jElbow").setAttribute("transform","translate(0,-78) rotate("+p.e+")");
+  $("jWrist").setAttribute("transform","translate(0,-66) rotate("+p.w+")");
+  $("clawL").style.transform=p.g?"translate(4px,0)":"translate(0,0)";
+  $("clawR").style.transform=p.g?"translate(-4px,0)":"translate(0,0)";
+  $("boxFeed").classList.toggle("show",!!p.feed);
+  $("boxHeld").classList.toggle("show",!!p.held);
+  $("boxDrop").classList.toggle("show",!!p.drop);
+  $("beltDash").classList.toggle("move",!!running);
+  document.querySelectorAll("#steps .step").forEach((n,i)=>n.classList.toggle("on",i===step));
+}
+
+const REGS=[
+ ["%QX0.0","COIL","motor_arm_enable","Arm servo enable","arm"],
+ ["%QX0.1","COIL","gripper_close","Gripper magnet","grip"],
+ ["%QX0.2","COIL","conveyor_run","Conveyor drive","conv"],
+ ["%QX0.3","COIL","cycle_busy","Cycle in progress","busy"],
+ ["%QX0.4","COIL","cycle_complete","Cycle complete","done"],
+ ["%QX0.5","COIL","e_stop_active","Emergency stop","estop"],
+ ["%QX0.6","COIL","request_safe_state","Safe-state request","safe"],
+ ["%MW0","HR","cycle_step","Sequence state","step"],
+ ["%MW1","HR","cycle_count","Completed cycles","cycles"],
+ ["%MW2","HR","estop_trip_count","SIS trip count","trips"],
+ ["%MW3","HR","last_cycle_ms","Last cycle (ms)","lastms"],
+ ["%MW4","HR","slow_mode_active","Degraded/slow mode","slow"],
+ ["%MW10","HR","safety_state","Safety state code","sstate"],
+ ["%MW11","HR","ack_counter","Heartbeat ack","ack"],
+ ["%MW12","HR","last_fault_code","Last fault code","fault"],
+];
+(function(){ const b=$("rtbody"); REGS.forEach(r=>{ const tr=document.createElement("tr");
+  tr.innerHTML='<td>'+r[0]+'</td><td class="kind">'+r[1]+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td><td class="v" id="rg_'+r[4]+'">&mdash;</td>'; b.appendChild(tr);});})();
+function setReg(k,v){ const el=$("rg_"+k); if(el) setText(el,v); }
+
+async function pollState(){
+  try{
+    const r=await fetch("/api/hmi/state",{cache:"no-store",signal:AbortSignal.timeout(7000)});
+    if(!r.ok) throw 0;
+    const d=await r.json(); lastOkTs=Date.now(); setOnline(true);
+    const p=d.plc_state||{};
+    if(p.error){ $("ssMeta").textContent="PLC link: "+p.error; return; }
+
+    setIO("led_arm","v_arm",!!p.motor_arm_enable,"ON","OFF","");
+    setIO("led_grip","v_grip",!!p.gripper_close,"CLOSED","OPEN","g");
+    setIO("led_conv","v_conv",!!p.conveyor_run,"RUN","OFF","");
+    setIO("led_slow","v_slow",!!p.slow_mode_active,"ON","OFF","a");
+    setIO("led_busy","v_busy",!!p.cycle_busy,"ON","OFF","");
+    setIO("led_done","v_done",!!p.cycle_complete,"YES","OFF","g");
+    setIO("led_ps","v_ps",!!p.physical_start_btn,"PRESS","OFF","g");
+    setIO("led_px","v_px",!!p.physical_stop_btn,"PRESS","OFF","r");
+
+    const step=p.cycle_step|0;
+    setText($("v_step"),step+" · "+(STEP_NAMES[step]||"?"));
+    renderArm(step,!!p.cycle_busy);
+
+    setText($("kpiCycles"),p.cycle_count|0);
+    setText($("kpiLastMs"),(p.last_cycle_ms|0)+" ms");
+    setText($("kpiTripsV"),p.estop_trip_count|0);
+    setText($("v_trips"),p.estop_trip_count|0);
+    setText($("kpiHb"),p.ack_counter|0);
+    setText($("v_ack"),p.ack_counter|0);
+    $("kpiHbS").textContent="ack %MW11";
+
+    const ss=p.safety_state|0, name=ss===2?"EMERGENCY":ss===1?"DEGRADED":"NORMAL";
+    const sb=$("ssBadge"); sb.textContent=name; sb.className="ss-badge ss-"+name;
+    $("ssMeta").textContent = ss===2?"latched — manual reset required":ss===1?"degraded / slow mode":"watchdog armed";
+    setText($("v_sstate"),ss);
+    setText($("v_fault"),(p.last_fault_code|0)+" · "+(FAULTS[p.last_fault_code|0]||"?"));
+    $("led_estop").className="led"+(p.e_stop_active?" on r":"");
+    $("led_safe").className="led"+(p.request_safe_state?" on a":"");
+    const kv=$("kpiSafetyV"); kv.textContent=name; kv.className="k-v "+(ss===2?"crit":ss===1?"warn":"ok");
+    $("kpiSafety").className="kpi "+(ss===2?"s-crit":ss===1?"s-warn":"s-ok");
+
+    setReg("arm",p.motor_arm_enable?1:0);setReg("grip",p.gripper_close?1:0);setReg("conv",p.conveyor_run?1:0);
+    setReg("busy",p.cycle_busy?1:0);setReg("done",p.cycle_complete?1:0);setReg("estop",p.e_stop_active?1:0);
+    setReg("safe",p.request_safe_state?1:0);setReg("step",step);setReg("cycles",p.cycle_count|0);
+    setReg("trips",p.estop_trip_count|0);setReg("lastms",p.last_cycle_ms|0);setReg("slow",p.slow_mode_active|0);
+    setReg("sstate",ss);setReg("ack",p.ack_counter|0);setReg("fault",p.last_fault_code|0);
+
+    diff("safety_state",ss,"Safety state",v=>["NORMAL","DEGRADED","EMERGENCY"][v]||v);
+    diff("e_stop_active",p.e_stop_active?1:0,"E-stop",v=>v?"ASSERTED":"clear");
+    diff("cycle_complete",p.cycle_complete?1:0,"Cycle",v=>v?"COMPLETE":"running");
+    diff("slow_mode_active",p.slow_mode_active|0,"Degraded mode",v=>v?"ON":"off");
+
+    if(Array.isArray(d.latest_alerts)) renderIDS(d.latest_alerts);
+  }catch(e){ setOnline(false); }
+}
+
+function renderIDS(alerts){
+  const f=$("idsFeed");
+  if(!alerts.length){ if(!f.querySelector(".empty")) f.innerHTML='<div class="empty">No anomalies &mdash; baseline nominal</div>'; return; }
+  f.innerHTML="";
+  alerts.slice(0,12).forEach(a=>{
+    const al=a.alert||{}, lab=a.lab||{};
+    const sev=(al.severity===1)?"crit":(al.severity===2)?"warn":"ok";
+    const row=document.createElement("div"); row.className="frow "+sev;
+    const ts=(a.timestamp||"").substr(11,8);
+    row.innerHTML='<div class="fh"><span class="ip">'+(a.src_ip||"?")+' → '+(a.dest_ip||"OT")+'</span><span class="ts">'+ts+'</span></div>'+
+      '<div class="fd">'+(al.signature||al.category||"anomaly")+(lab.iforest_score!=null?' <b style="color:var(--crit)">&middot; if='+lab.iforest_score+'</b>':'')+'</div>';
+    f.appendChild(row);
+  });
+}
+
+const cv=$("spark"), cx=cv.getContext("2d");
+function drawSpark(series){
+  const W=cv.width=cv.clientWidth*devicePixelRatio, H=cv.height=84*devicePixelRatio;
+  cx.clearRect(0,0,W,H); if(!series.length){return;}
+  const max=Math.max(0.15,...series.map(s=>Math.max(0,s.iforest_score||0)))*1.15, n=series.length, dx=W/Math.max(1,n-1);
+  const ty=H-(0.15/max)*H; cx.strokeStyle="rgba(246,191,82,.35)";cx.setLineDash([5,5]);cx.lineWidth=devicePixelRatio;
+  cx.beginPath();cx.moveTo(0,ty);cx.lineTo(W,ty);cx.stroke();cx.setLineDash([]);
+  const grad=cx.createLinearGradient(0,0,0,H); grad.addColorStop(0,"rgba(55,210,230,.35)");grad.addColorStop(1,"rgba(55,210,230,0)");
+  cx.beginPath(); series.forEach((s,i)=>{const x=i*dx,y=H-(Math.max(0,s.iforest_score||0)/max)*H; i?cx.lineTo(x,y):cx.moveTo(x,y);});
+  cx.lineTo(W,H);cx.lineTo(0,H);cx.closePath();cx.fillStyle=grad;cx.fill();
+  cx.beginPath(); series.forEach((s,i)=>{const x=i*dx,y=H-(Math.max(0,s.iforest_score||0)/max)*H; i?cx.lineTo(x,y):cx.moveTo(x,y);});
+  cx.strokeStyle="#37d2e6";cx.lineWidth=2*devicePixelRatio;cx.stroke();
+  series.forEach((s,i)=>{ if(s.anomaly){const x=i*dx,y=H-(Math.max(0,s.iforest_score||0)/max)*H;
+    cx.beginPath();cx.arc(x,y,3*devicePixelRatio,0,7);cx.fillStyle="#ff6b86";cx.fill();}});
+}
+function setGauge(rate){
+  const arc=$("gArc"); arc.style.strokeDashoffset=166-Math.min(1,rate)*166;
+  const lvl=$("gLvl"); let c="#37d39a",t="NOMINAL";
+  if(rate>=0.5){c="#ff6b86";t="CRITICAL";} else if(rate>=0.15){c="#f6bf52";t="ELEVATED";}
+  arc.style.stroke=c; lvl.style.color=c; lvl.textContent=t;
+  const kv=$("kpiThreatV"); kv.textContent=t; kv.className="k-v "+(rate>=0.5?"crit":rate>=0.15?"warn":"ok");
+  $("kpiThreat").className="kpi "+(rate>=0.5?"s-crit":rate>=0.15?"s-warn":"s-ok");
+}
+async function pollTrend(){
+  try{
+    const r=await fetch("/api/trend/history",{cache:"no-store",signal:AbortSignal.timeout(7000)}); if(!r.ok)throw 0;
+    const s=await r.json(); const series=Array.isArray(s)?s.slice(-60):[];
+    drawSpark(series);
+    const last=series[series.length-1];
+    setText($("sparkNow"),(last&&last.iforest_score!=null?last.iforest_score:0).toFixed(3));
+    setGauge(series.length?series.filter(x=>x.anomaly).length/series.length:0);
+  }catch(e){}
+}
+
+$("logTabs").addEventListener("click",e=>{ const t=e.target.closest(".tab"); if(!t)return;
+  document.querySelectorAll("#logTabs .tab").forEach(x=>x.classList.toggle("on",x===t));
+  activeSvc=t.dataset.svc; pollLogs(); });
+async function pollLogs(){
+  try{
+    const r=await fetch("/api/hmi/logs?service="+activeSvc,{cache:"no-store",signal:AbortSignal.timeout(7000)}); if(!r.ok)throw 0;
+    const d=await r.json(); const pre=$("console");
+    const atBottom=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-30;
+    pre.textContent=((d.logs||"(no output)").trim())||"(empty)";
+    if(atBottom) pre.scrollTop=pre.scrollHeight;
+  }catch(e){}
+}
+
+pollState(); pollTrend(); pollLogs();
+setInterval(pollState,POLL); setInterval(pollTrend,TREND); setInterval(pollLogs,LOGS);
+</script>
+</body>
+</html>

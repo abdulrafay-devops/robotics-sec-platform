@@ -1,0 +1,370 @@
+<?xml version="1.0" ?>
+<!--
+    Lab arm — 6-DoF industrial manipulator (revolute joints).
+    Visual design: KUKA-style — charcoal-grey links, orange joint housings,
+    silver tool flange, 2-finger parallel gripper.
+
+    Joint names, limits, axes and origins are unchanged from v1 so the
+    Stage 2 ML pipeline keeps the same /joint_states feature space.
+    All improvements are purely visual (extra <visual> elements per link,
+    better materials, joint-housing cylinders, gripper geometry).
+    Gazebo Classic picks up per-link material overrides from <gazebo> tags.
+-->
+<robot name="lab_arm">
+
+  <!-- ── palette ─────────────────────────────────────── -->
+  <material name="arm_dark">    <color rgba="0.20 0.22 0.25 1.0"/></material>
+  <material name="arm_mid">     <color rgba="0.38 0.40 0.44 1.0"/></material>
+  <material name="joint_orange"><color rgba="1.00 0.45 0.00 1.0"/></material>
+  <material name="silver">      <color rgba="0.76 0.78 0.80 1.0"/></material>
+  <material name="gripper_dark"><color rgba="0.24 0.26 0.28 1.0"/></material>
+  <material name="sensor_red">  <color rgba="0.90 0.10 0.05 1.0"/></material>
+  <material name="base_plate">  <color rgba="0.14 0.16 0.18 1.0"/></material>
+
+  <!-- ============================== world base anchor ================= -->
+  <link name="world"/>
+  <joint name="fixed_base" type="fixed">
+    <parent link="world"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ============================== base_link ========================= -->
+  <!-- Hex mounting plate + body cylinder + top flange                   -->
+  <link name="base_link">
+    <!-- mounting base plate -->
+    <visual name="base_plate">
+      <origin xyz="0 0 0.02"/>
+      <geometry><box size="0.26 0.26 0.04"/></geometry>
+      <material name="base_plate"/>
+    </visual>
+    <!-- main body cylinder -->
+    <visual name="base_body">
+      <origin xyz="0 0 0.07"/>
+      <geometry><cylinder length="0.06" radius="0.11"/></geometry>
+      <material name="arm_dark"/>
+    </visual>
+    <!-- top connector ring (orange) -->
+    <visual name="base_ring">
+      <origin xyz="0 0 0.105"/>
+      <geometry><cylinder length="0.01" radius="0.085"/></geometry>
+      <material name="joint_orange"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.05"/>
+      <geometry><cylinder length="0.10" radius="0.11"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="2.5"/>
+      <inertia ixx="0.012" ixy="0" ixz="0" iyy="0.012" iyz="0" izz="0.015"/>
+    </inertial>
+  </link>
+
+  <!-- ── Gazebo physics overrides ─────────────────────────────
+       gravity=false on every link prevents the arm from collapsing
+       under its own weight. Without a ros2_control joint controller
+       the only way to hold pose is to remove gravity and let
+       SetModelConfiguration drive positions directly.
+       self_collide=false removes inter-link collision overhead.    -->
+  <gazebo reference="base_link">
+    <material>Gazebo/DarkGrey</material>
+    <gravity>false</gravity>
+    <self_collide>false</self_collide>
+    <kinematic>true</kinematic>
+  </gazebo>
+
+  <!-- ============================== link1 — shoulder ================== -->
+  <!-- waist-rotation housing disc + shoulder column + elbow housing     -->
+  <link name="link1">
+    <!-- waist housing disc (orange) — bottom of link1 at the j1 joint -->
+    <visual name="waist_housing">
+      <origin xyz="0 0 0.025"/>
+      <geometry><cylinder length="0.05" radius="0.075"/></geometry>
+      <material name="joint_orange"/>
+    </visual>
+    <!-- shoulder column — main arm body -->
+    <visual name="shoulder_body">
+      <origin xyz="0 0 0.165"/>
+      <geometry><box size="0.090 0.090 0.25"/></geometry>
+      <material name="arm_dark"/>
+    </visual>
+    <!-- reinforcement ribs (side panels, slightly lighter) -->
+    <visual name="rib_front">
+      <origin xyz="0.043 0 0.165"/>
+      <geometry><box size="0.006 0.075 0.24"/></geometry>
+      <material name="arm_mid"/>
+    </visual>
+    <visual name="rib_back">
+      <origin xyz="-0.043 0 0.165"/>
+      <geometry><box size="0.006 0.075 0.24"/></geometry>
+      <material name="arm_mid"/>
+    </visual>
+    <!-- elbow housing disc (orange) — top of link1 at the j2 joint -->
+    <visual name="elbow_housing">
+      <origin xyz="0 0 0.275"/>
+      <geometry><cylinder length="0.05" radius="0.065"/></geometry>
+      <material name="joint_orange"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.15"/>
+      <geometry><box size="0.09 0.09 0.30"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="1.2"/>
+      <inertia ixx="0.006" ixy="0" ixz="0" iyy="0.006" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+  <joint name="j1" type="revolute">
+    <parent link="base_link"/>
+    <child link="link1"/>
+    <origin xyz="0 0 0.10"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="20" velocity="2.0"/>
+    <dynamics damping="0.5" friction="0.0"/>
+  </joint>
+  <gazebo reference="link1">
+    <material>Gazebo/DarkGrey</material>
+    <gravity>false</gravity>
+    <self_collide>false</self_collide>
+    <kinematic>true</kinematic>
+  </gazebo>
+
+  <!-- ============================== link2 — upper arm ================= -->
+  <link name="link2">
+    <!-- upper arm body -->
+    <visual name="upper_body">
+      <origin xyz="0 0 0.14"/>
+      <geometry><box size="0.080 0.080 0.26"/></geometry>
+      <material name="arm_dark"/>
+    </visual>
+    <!-- side panels -->
+    <visual name="upper_rib_l">
+      <origin xyz="0.038 0 0.14"/>
+      <geometry><box size="0.006 0.068 0.25"/></geometry>
+      <material name="arm_mid"/>
+    </visual>
+    <visual name="upper_rib_r">
+      <origin xyz="-0.038 0 0.14"/>
+      <geometry><box size="0.006 0.068 0.25"/></geometry>
+      <material name="arm_mid"/>
+    </visual>
+    <!-- forearm housing at top -->
+    <visual name="forearm_housing">
+      <origin xyz="0 0 0.265"/>
+      <geometry><cylinder length="0.05" radius="0.056"/></geometry>
+      <material name="joint_orange"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.15"/>
+      <geometry><box size="0.08 0.08 0.30"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.9"/>
+      <inertia ixx="0.004" ixy="0" ixz="0" iyy="0.004" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+  <joint name="j2" type="revolute">
+    <parent link="link1"/>
+    <child link="link2"/>
+    <origin xyz="0 0 0.30"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.8" upper="1.8" effort="20" velocity="2.0"/>
+    <dynamics damping="0.5" friction="0.0"/>
+  </joint>
+  <gazebo reference="link2">
+    <material>Gazebo/DarkGrey</material>
+    <gravity>false</gravity>
+    <self_collide>false</self_collide>
+    <kinematic>true</kinematic>
+  </gazebo>
+
+  <!-- ============================== link3 — forearm =================== -->
+  <link name="link3">
+    <!-- forearm cylinder — narrower, round profile -->
+    <visual name="forearm_body">
+      <origin xyz="0 0 0.11"/>
+      <geometry><cylinder length="0.20" radius="0.042"/></geometry>
+      <material name="arm_mid"/>
+    </visual>
+    <!-- wrist housing -->
+    <visual name="wrist_housing">
+      <origin xyz="0 0 0.218"/>
+      <geometry><cylinder length="0.04" radius="0.050"/></geometry>
+      <material name="joint_orange"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.12"/>
+      <geometry><box size="0.06 0.06 0.24"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.6"/>
+      <inertia ixx="0.003" ixy="0" ixz="0" iyy="0.003" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+  <joint name="j3" type="revolute">
+    <parent link="link2"/>
+    <child link="link3"/>
+    <origin xyz="0 0 0.30"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.6" upper="2.6" effort="15" velocity="2.5"/>
+    <dynamics damping="0.5" friction="0.0"/>
+  </joint>
+  <gazebo reference="link3">
+    <material>Gazebo/Grey</material>
+    <gravity>false</gravity>
+    <self_collide>false</self_collide>
+    <kinematic>true</kinematic>
+  </gazebo>
+
+  <!-- ============================== link4 — wrist roll ================ -->
+  <link name="link4">
+    <visual name="wrist_roll_body">
+      <origin xyz="0 0 0.055"/>
+      <geometry><cylinder length="0.09" radius="0.036"/></geometry>
+      <material name="arm_dark"/>
+    </visual>
+    <visual name="wrist_roll_housing">
+      <origin xyz="0 0 0.115"/>
+      <geometry><cylinder length="0.03" radius="0.044"/></geometry>
+      <material name="joint_orange"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.07"/>
+      <geometry><cylinder length="0.14" radius="0.042"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.4"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.0005"/>
+    </inertial>
+  </link>
+  <joint name="j4" type="revolute">
+    <parent link="link3"/>
+    <child link="link4"/>
+    <origin xyz="0 0 0.24"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="10" velocity="3.0"/>
+    <dynamics damping="0.3" friction="0.0"/>
+  </joint>
+  <gazebo reference="link4">
+    <material>Gazebo/DarkGrey</material>
+    <gravity>false</gravity>
+    <self_collide>false</self_collide>
+    <kinematic>true</kinematic>
+  </gazebo>
+
+  <!-- ============================== link5 — wrist pitch =============== -->
+  <link name="link5">
+    <visual name="wrist_pitch_body">
+      <origin xyz="0 0 0.038"/>
+      <geometry><cylinder length="0.07" radius="0.030"/></geometry>
+      <material name="arm_dark"/>
+    </visual>
+    <visual name="tool_flange_ring">
+      <origin xyz="0 0 0.082"/>
+      <geometry><cylinder length="0.02" radius="0.038"/></geometry>
+      <material name="joint_orange"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.05"/>
+      <geometry><cylinder length="0.10" radius="0.035"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.3"/>
+      <inertia ixx="0.0005" ixy="0" ixz="0" iyy="0.0005" iyz="0" izz="0.0003"/>
+    </inertial>
+  </link>
+  <joint name="j5" type="revolute">
+    <parent link="link4"/>
+    <child link="link5"/>
+    <origin xyz="0 0 0.14"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.9" upper="1.9" effort="10" velocity="3.0"/>
+    <dynamics damping="0.3" friction="0.0"/>
+  </joint>
+  <gazebo reference="link5">
+    <material>Gazebo/DarkGrey</material>
+    <gravity>false</gravity>
+    <self_collide>false</self_collide>
+    <kinematic>true</kinematic>
+  </gazebo>
+
+  <!-- ============================== link6 — gripper =================== -->
+  <!-- Tool flange disc + gripper palm + two parallel fingers + sensors  -->
+  <link name="link6">
+    <!-- tool flange disc (silver) -->
+    <visual name="tool_flange">
+      <origin xyz="0 0 0.018"/>
+      <geometry><cylinder length="0.034" radius="0.040"/></geometry>
+      <material name="silver"/>
+    </visual>
+    <!-- gripper palm body -->
+    <visual name="gripper_palm">
+      <origin xyz="0 0 0.055"/>
+      <geometry><box size="0.070 0.055 0.042"/></geometry>
+      <material name="gripper_dark"/>
+    </visual>
+    <!-- finger A (left) -->
+    <visual name="finger_a">
+      <origin xyz=" 0.027 0 0.098"/>
+      <geometry><box size="0.014 0.045 0.060"/></geometry>
+      <material name="gripper_dark"/>
+    </visual>
+    <!-- finger B (right) -->
+    <visual name="finger_b">
+      <origin xyz="-0.027 0 0.098"/>
+      <geometry><box size="0.014 0.045 0.060"/></geometry>
+      <material name="gripper_dark"/>
+    </visual>
+    <!-- proximity sensor tip A (red LED indicator) -->
+    <visual name="sensor_a">
+      <origin xyz=" 0.027 0 0.133"/>
+      <geometry><cylinder length="0.008" radius="0.007"/></geometry>
+      <material name="sensor_red"/>
+    </visual>
+    <!-- proximity sensor tip B -->
+    <visual name="sensor_b">
+      <origin xyz="-0.027 0 0.133"/>
+      <geometry><cylinder length="0.008" radius="0.007"/></geometry>
+      <material name="sensor_red"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.07"/>
+      <geometry><box size="0.07 0.06 0.14"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.25"/>
+      <inertia ixx="0.0003" ixy="0" ixz="0" iyy="0.0003" iyz="0" izz="0.0003"/>
+    </inertial>
+  </link>
+  <joint name="j6" type="revolute">
+    <parent link="link5"/>
+    <child link="link6"/>
+    <origin xyz="0 0 0.10"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="5" velocity="3.5"/>
+    <dynamics damping="0.2" friction="0.0"/>
+  </joint>
+  <gazebo reference="link6">
+    <material>Gazebo/Grey</material>
+    <gravity>false</gravity>
+    <self_collide>false</self_collide>
+    <kinematic>true</kinematic>
+  </gazebo>
+
+  <!--
+    Stage 1 design choice: no gazebo_ros2_control plugin or transmissions.
+    The cyclic_motion.py node publishes /lab_arm/joint_states; that stream is
+    passively tapped by joint_telemetry_bridge.py and scored by the robot-behavior
+    LSTM autoencoder in vm-ai/robot_consumer.py (the robot anomaly plane). Gazebo
+    physics still simulates collisions and gravity for visual realism in demos.
+  -->
+  <gazebo>
+    <plugin name="gazebo_ros_joint_pose_trajectory" filename="libgazebo_ros_joint_pose_trajectory.so">
+      <ros>
+        <namespace>/lab_arm</namespace>
+        <remapping>set_joint_trajectory:=joint_trajectory</remapping>
+      </ros>
+      <update_rate>20.0</update_rate>
+    </plugin>
+  </gazebo>
+</robot>

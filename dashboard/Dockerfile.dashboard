@@ -1,0 +1,27 @@
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+FROM nginx:1.27-alpine
+
+# Generate self-signed TLS certificate for the dashboard
+RUN apk add --no-cache openssl && \
+    mkdir -p /etc/nginx/ssl && \
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout /etc/nginx/ssl/lab.key \
+        -out    /etc/nginx/ssl/lab.crt \
+        -subj "/C=US/ST=Lab/L=Lab/O=RoboticsSecurity/CN=robotics-lab.local"
+
+COPY --from=builder /app/dist /usr/share/nginx/html
+# Store as template so LAB_API_KEY is injected at container startup.
+# NOT using /etc/nginx/templates/ (the nginx image's auto-envsubst would replace
+# ALL $variables including nginx's own $host, $remote_addr, etc, breaking the config).
+# Instead we run envsubst manually with ONLY '${LAB_API_KEY}' so nginx vars are untouched.
+COPY nginx.conf /etc/nginx/conf.d/default.conf.template
+EXPOSE 80 443
+CMD ["/bin/sh", "-c", \
+  "envsubst '${LAB_API_KEY}' < /etc/nginx/conf.d/default.conf.template \
+   > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]

@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Stage 6 — auto-create a post-mortem stub for an incident.
+#
+# Writes /var/lab/state/ir/postmortems/<incident_id>.md from a template
+# and pushes a notification to /var/log/syslog. The playbook engine
+# refuses to mark the incident closed until this file is git-merged
+# back into the Stage 5 repo (lessons-learned loop).
+set -u
+INCIDENT=${1:?usage: ir-postmortem-stub <incident_id> <category>}
+CATEGORY=${2:-unknown}
+DIR=/var/lab/state/ir/postmortems
+install -d -m 0755 "${DIR}"
+OUT=${DIR}/${INCIDENT}.md
+
+if [[ -f "${OUT}" ]]; then
+    echo "[postmortem] stub already exists: ${OUT}"
+    exit 0
+fi
+
+cat > "${OUT}" <<MD
+# Incident Post-Mortem — ${INCIDENT}
+
+- **Category:** ${CATEGORY}
+- **Opened:** $(date -u +%FT%TZ)
+- **Closed:** _(fill on close)_
+
+## Summary
+
+_(brief description of the incident)_
+
+## Timeline
+
+- $(date -u +%FT%TZ) — Incident detected by Stage 6 playbook engine
+
+## Root Cause
+
+_(write 2-3 sentence analysis here)_
+
+## Remediation
+
+_(actions taken to mitigate and prevent this incident)_
+
+## Required Platform Change
+
+Per the lessons-learned loop, this incident MUST result in at least
+one concrete platform change before it can be closed. Pick at least
+one and reference the commit:
+
+- [ ] new Suricata rule
+- [ ] new Stage 5 lint
+- [ ] new playbook trigger
+- [ ] tightened SROS2 policy
+- [ ] new Stage 4 baseline rule
+
+## Verification
+
+- [ ] Stage 5 pipeline rebuilt cleanly with the change
+- [ ] Stage 3 safety loop still passes
+- [ ] Stage 2 dataset gate AUC unchanged or improved
+MD
+chmod 0644 "${OUT}"
+logger -t lab-ir "postmortem-stub incident=${INCIDENT} path=${OUT}"
+echo "[postmortem] stub created: ${OUT}"

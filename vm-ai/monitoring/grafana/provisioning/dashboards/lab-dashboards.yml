@@ -1,0 +1,14 @@
+apiVersion: 1
+
+providers:
+  - name: Robotics Security Platform
+    orgId: 1
+    folder: Robotics Security Platform
+    folderUid: robotics-security-platform
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 10
+    options:
+      path: /opt/lab/vm-ai/monitoring/dashboards
+      foldersFromFilesStructure: false
