@@ -104,11 +104,19 @@ def main(argv: Optional[list] = None) -> int:
     # The 99th-percentile of calibration scores is our false-positive gate:
     # at most 1% of normal traffic should trigger an alert.
     calib_scores = np.maximum(0.0, -model.decision_function(X_calib_s))
-    fp_threshold = float(np.percentile(calib_scores, 99))
-    LOG.info("Calibration normal score: p50=%.4f  p95=%.4f  p99=%.4f (→ threshold)",
+    train_scores = np.maximum(0.0, -model.decision_function(X_train_s))
+    # A p99 gate fires ~1% of NORMAL windows; on a continuous 5s-window stream that
+    # is a fake incident every few minutes. Calibrate ABOVE the normal maximum with a
+    # margin so steady normal traffic never trips it. On an ultra-regular single-arm
+    # baseline the IsolationForest is a gross-outlier backstop — the autoencoders
+    # carry the fine-grained sensitivity — so a conservative gate is correct here.
+    normal_max   = float(max(np.max(calib_scores), np.max(train_scores)))
+    fp_threshold = round(max(float(np.percentile(calib_scores, 99)), normal_max) * 1.25, 4)
+    LOG.info("Calibration normal score: p50=%.4f  p95=%.4f  p99=%.4f  max=%.4f (→ threshold=%.4f)",
              np.percentile(calib_scores, 50),
              np.percentile(calib_scores, 95),
-             fp_threshold)
+             np.percentile(calib_scores, 99),
+             normal_max, fp_threshold)
 
     # ── 5. Evaluate AUC on synthetic attack data ────────────────────────────
     X_atk, y_atk = synthetic_attack_only(n_episodes=30)

@@ -52,9 +52,11 @@ EXPECTED: List[Probe] = [
     # Stage 5 signed deploy: OT PULLS signed programs from the DMZ store (never IT->OT push)
     Probe('container-ot', '192.168.30.40', 80, 'ALLOW', 'OT pulls signed PLC programs from the DMZ store'),
 
-    # DMZ jump host brokers RDP into OT (and nothing else)
-    Probe('lab-guacamole', '192.168.10.10', 3389, 'ALLOW', 'Guacamole brokers RDP to OT'),
-    Probe('lab-guacamole', '192.168.10.10', 502,  'DENY',  'Guacamole must NOT reach OT Modbus'),
+    # DMZ jump host brokers RDP into OT (and nothing else). Probe from guacd — it is
+    # the daemon that actually opens the RDP connection, so it (not just the webapp)
+    # must have the OT route + conduit. (Probing the webapp masked a real outage.)
+    Probe('lab-guacd', '192.168.10.10', 3389, 'ALLOW', 'guacd brokers RDP to OT'),
+    Probe('lab-guacd', '192.168.10.10', 502,  'DENY',  'guacd must NOT reach OT Modbus'),
 
     # SEC is single-homed on OT: monitors the PLC, ships features to Redis via ONE
     # scoped conduit, and can no longer pivot into the rest of the mgmt zone.

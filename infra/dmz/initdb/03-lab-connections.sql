@@ -38,7 +38,7 @@ WITH grp AS (SELECT connection_group_id FROM guacamole_connection_group WHERE co
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, p, v FROM conn
 CROSS JOIN (VALUES
-    ('hostname',           '192.168.30.10'),
+    ('hostname',           '192.168.10.10'),
     ('port',               '3389'),
     ('username',           'lab'),
     ('password',           'lab2026'),
@@ -67,7 +67,7 @@ WITH grp AS (SELECT connection_group_id FROM guacamole_connection_group WHERE co
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, p, v FROM conn
 CROSS JOIN (VALUES
-    ('hostname',              '192.168.30.10'),
+    ('hostname',              '192.168.10.10'),
     ('port',                  '3389'),
     ('username',              'lab'),
     ('password',              'lab2026'),
@@ -98,7 +98,7 @@ WITH grp AS (SELECT connection_group_id FROM guacamole_connection_group WHERE co
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, p, v FROM conn
 CROSS JOIN (VALUES
-    ('hostname',              '192.168.30.10'),
+    ('hostname',              '192.168.10.10'),
     ('port',                  '3389'),
     ('username',              'lab'),
     ('password',              'lab2026'),
@@ -129,7 +129,7 @@ WITH grp AS (SELECT connection_group_id FROM guacamole_connection_group WHERE co
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, p, v FROM conn
 CROSS JOIN (VALUES
-    ('hostname',           '192.168.30.10'),
+    ('hostname',           '192.168.10.10'),
     ('port',               '3389'),
     ('username',           'lab'),
     ('password',           'lab2026'),
@@ -158,7 +158,7 @@ WITH grp AS (SELECT connection_group_id FROM guacamole_connection_group WHERE co
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, p, v FROM conn
 CROSS JOIN (VALUES
-    ('hostname',    '192.168.30.10'),
+    ('hostname',    '192.168.10.10'),
     ('port',        '3389'),
     ('username',    'lab'),
     ('password',    'lab2026'),

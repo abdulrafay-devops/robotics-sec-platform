@@ -49,9 +49,9 @@ function computeThreatLevel(iforest: number, pcaZ: number, rate: number): Threat
   // z-alert is ~4.0. WATCH must sit ABOVE the normal iforest range, so it starts at
   // the model's alert line; attack escalation is driven mainly by pca_z (which jumps
   // into the thousands on an attack while the iforest stays modest).
-  if (iforest > 0.45  || pcaZ > 10  || rate > 30) return 'CRITICAL'
-  if (iforest > 0.30  || pcaZ > 6.43 || rate > 15) return 'ELEVATED'
-  if (iforest > 0.22  || pcaZ > 4.0  || rate > 5)  return 'WATCH'
+  if (iforest > 0.55  || pcaZ > 10   || rate > 30) return 'CRITICAL'
+  if (iforest > 0.42  || pcaZ > 6.43 || rate > 15) return 'ELEVATED'
+  if (iforest > 0.30  || pcaZ > 4.0  || rate > 5)  return 'WATCH'
   return 'NOMINAL'
 }
 
@@ -416,12 +416,12 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
           {/* IForest Gauge */}
           <div className="card flex flex-col items-center py-3 gap-1">
             <div className="card-header justify-center !mb-1">IsolationForest</div>
-            <ArcGauge value={iForest} max={0.50} dangerAt={0.30} warnAt={0.22}
-              label="IF Score" sublabel=">0.21 = anomaly" />
+            <ArcGauge value={iForest} max={0.60} dangerAt={0.45} warnAt={0.30}
+              label="IF Score" sublabel=">0.30 = anomaly" />
             <div className={clsx('text-[8.5px] font-mono text-center mt-0.5',
-              iForest >= 0.30 ? 'text-red-400 font-bold' : iForest >= 0.22 ? 'text-amber-400' : iForest >= 0 ? 'text-emerald-500' : 'text-slate-700')}>
-              {iForest >= 0.30 ? '▲ OUTLIER'
-               : iForest >= 0.22 ? '⚠ ELEVATED'
+              iForest >= 0.45 ? 'text-red-400 font-bold' : iForest >= 0.30 ? 'text-amber-400' : iForest >= 0 ? 'text-emerald-500' : 'text-slate-700')}>
+              {iForest >= 0.45 ? '▲ OUTLIER'
+               : iForest >= 0.30 ? '⚠ ELEVATED'
                : iForest >= 0    ? '✓ NOMINAL'
                :                  '— WAITING'}
             </div>

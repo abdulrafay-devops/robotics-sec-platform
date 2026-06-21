@@ -228,6 +228,19 @@ services:
     image: guacamole/guacd:1.5.5
     container_name: lab-guacd
     restart: unless-stopped
+    # Run as root so the NET_ADMIN cap is effective for the route-add below (the
+    # stock image drops to the non-root 'guacd' user, for which caps are inert).
+    # Mirrors the guacamole webapp, which already runs root+NET_ADMIN.
+    user: root
+    cap_add:
+      - NET_ADMIN          # guacd makes the actual RDP connection into OT, so IT
+                           # (not just the guacamole webapp) needs the route to OT
+    # Add the OT route via the router, then exec the stock guacd. The image ships
+    # /sbin/ip, so no custom build is needed.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - "ip route add 192.168.10.0/24 via 192.168.30.2 2>/dev/null; exec /opt/guacamole/sbin/guacd -b 0.0.0.0 -L ${GUACD_LOG_LEVEL:-info} -f"
     networks:
       dmz-net: { ipv4_address: 192.168.30.22 }
 
