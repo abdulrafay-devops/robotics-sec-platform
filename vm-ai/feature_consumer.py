@@ -201,10 +201,16 @@ class _Scorer:
 
         idx = np.argsort(-np.abs(xs.ravel()))[:3]
         top = [FEATURE_NAMES[i] for i in idx]
+        # Emit NON-NEGATIVE scores. A z-score below 0 just means "reconstructs better
+        # than the calibration average" = perfectly normal, so we floor it to 0. This
+        # gives a clean convention everywhere (0 = normal/better, higher = more
+        # anomalous — same as the IsolationForest). Firing decisions above used the raw
+        # z (clamping negatives can't change a >= positive-threshold test), so detection
+        # sensitivity is unchanged.
         return {
             "iforest_score": if_score,
-            "pca_z":         pca_z,
-            "tf_z":          tf_z,
+            "pca_z":         (max(0.0, pca_z) if pca_z is not None else None),
+            "tf_z":          (max(0.0, tf_z) if tf_z is not None else None),
             "anomaly":       anomaly,
             "top_features":  top,
             "model_version": FEATURE_VERSION,

@@ -140,7 +140,9 @@ class RobotScorer:
         z = (err - baseline_mean) / max(baseline_std, 1e-9)
         anomaly = bool(z >= self.z_alert or len(env_hits) > 0)
         return {
-            "robot_z": float(z),
+            # Non-negative gauge: a z below 0 = reconstructs better than baseline =
+            # perfectly normal motion, so floor to 0 (the anomaly test above uses raw z).
+            "robot_z": float(max(0.0, z)),
             "recon_error": float(err),
             "envelope_hits": env_hits,
             "top_channels": top_channels(ws, recon, 3),

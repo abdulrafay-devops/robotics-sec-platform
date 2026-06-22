@@ -91,6 +91,14 @@ non-OT source"). Result: calm baseline, every attack caught, sensitive models.
    OFF the live path; promote atomically once validated.
 4. The richer baseline (Step 2) + retrain (Step 3) are coupled — never deploy one without the other.
 
+## Hard requirement (user, 2026-06-21): scores must NEVER be negative
+DONE — `feature_consumer.py` floors pca_z/tf_z to ≥0 and `robot_consumer.py` floors robot_z to ≥0
+(firing still uses the raw z, so detection is unchanged). Convention now everywhere: **0 = normal
+or better, higher = more anomalous** (same as IsolationForest). Verified: baseline pca/tf/robot = 0.0,
+attack pca=93/tf=207k, detection intact. Baked into the AI image. Also "make models amazing &
+accurate" → do Step 2+3 (richer baseline → retrain) which is what makes them genuinely accurate +
+the PCA non-degenerate.
+
 ## Progress log
 - **2026-06-21** — Plan locked (all 4 steps, 6–8 attacks, single-arm, demo-grade, safety-net).
   Context file created. Starting Steps 1 + 2.
