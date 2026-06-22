@@ -92,10 +92,39 @@ Retrain on the richer baseline; validate against the WHOLE attack library via St
 promote if PASS. Add **explainability** to alerts ("fired because writes jumped 40× from a
 non-OT source"). Result: calm baseline, every attack caught, sensitive models.
 
-**Step 4 — SOC-grade response + dashboard.**  STATUS: ⬜ not started
-- A **playbook per attack type** (each attack → named, validated response).
-- Incident/case view: timeline + ATT&CK label + "why it fired" + analyst approve/reject + audit.
-- A clean detect → investigate → respond story per attack.
+**Step 4 — SOC-grade response + dashboard.**  STATUS: ✅ DONE (2026-06-23)
+RESULT: `validate_ir.py` offline 7/7 + **live 7/7** (each attack → correct per-attack playbook +
+MITRE tag, end-to-end). `validate_ai.py` re-run after the feature_consumer change: baseline calm,
+0 negatives, **7/7 detected** — detection plane intact (anti-churn honored).
+- **Attack classifier** `vm-ai/ir/attack_classifier.py` — turns a generic anomaly into a
+  named, MITRE ATT&CK for ICS tagged finding + plain-English "why it fired", from the
+  OBSERVED Modbus protocol fields (not the attacker's intent). 7/7 separable.
+- **Protocol fingerprint** added to each alert by `feature_consumer.py` (`event["fingerprint"]`)
+  — ADDITIVE metadata only, no model/threshold/training change. Robust to this Zeek decoder's
+  quirks: it does NOT parse the FC16 payload (addr/qty=0) and emits a spurious addr-0 companion
+  row per write, so the classifier keys on coil-vs-register split + write FCs + the SET of write
+  addresses (max register addr separates e-stop[reg2] from injection[reg0]). Real captured
+  signatures recorded in the harness.
+- **alert_bridge** calls the classifier, adds `attack_type`/`mitre`/`why`/`confidence` to the eve
+  record, and now dedups per attack_type (not the coarse category) so distinct techniques each
+  open their own incident.
+- **7 per-attack playbooks** (`vm-ai/ir/playbooks/pb_*.md`) with MITRE front-matter + attack_type
+  triggers + graded auto/human containment; engine `_match_triggers` two-pass (attack_type wins,
+  category = fallback); campaign-dedup + lessons-learned block made attack_type-aware; incident
+  record now carries attack_type/label/mitre/why/confidence/severity.
+- **Dashboard IR Console** (`IncidentPage.tsx`): Technique (MITRE) column, expandable case view
+  with "why it fired" + tactic + confidence + source + response timeline; the playbook catalog is
+  now the real 7-attack MITRE set. Approve/Reject was already wired.
+- **Harness** `infra/tests/validate_ir.py`: [A] offline classifier gate (7/7, deterministic) +
+  [B] live end-to-end gate (`--live`, resets state, fires 7 attacks, asserts a correctly-classified
+  MITRE-tagged incident per attack; spaces attacks past the 45s consumer cooldown).
+- VERIFIED: offline gate 7/7; live gate 7/7 (all techniques → correct playbook + MITRE); incidents
+  flow end-to-end → API → dashboard with the technique + "why it fired".
+
+**ALL 4 STEPS COMPLETE.** The AI detect → classify → respond story is demo-grade end-to-end:
+richer baseline + 7-attack MITRE library + retrained models (non-negative, behind the harness) +
+SOC-grade per-attack classification, playbooks, and incident case view — all gated by two harnesses
+(`validate_ai.py` for detection, `validate_ir.py` for response).
 
 ## Anti-churn rules (do not violate)
 1. **Never** overwrite a live model in `/opt/lab/models` unless `validate_models.py` PASSES.
@@ -129,3 +158,13 @@ the PCA non-degenerate.
   validated models backed up in `_model_backup_amazing/`. **Only Step 4 remains** (SOC-grade
   response: playbook-per-attack + incident/case view + ATT&CK labels + analyst approve/reject).
   Detection plane is now demo-grade: baseline NOMINAL + non-negative + all 7 attacks caught.
+- **2026-06-23** — **Step 4 DONE — ALL 4 STEPS COMPLETE.** Built the SOC response layer:
+  `ir/attack_classifier.py` (observed-protocol classification → named MITRE technique + "why it
+  fired"), an additive per-alert protocol fingerprint in `feature_consumer.py`, attack_type-keyed
+  dedup in `alert_bridge.py` + the playbook engine, 7 MITRE-tagged per-attack playbooks, and the IR
+  Console case view (MITRE column + expandable "why/tactic/confidence/timeline"). KEY LESSON: this
+  Zeek Modbus decoder does NOT parse FC16 write payloads (addr/qty log as 0) and emits a spurious
+  addr-0 companion row per write — captured real signatures and made the classifier key on the
+  coil/register split + write FCs + the SET of write addresses (e-stop writes reg 2, injection only
+  reg 0). `validate_ir.py` offline 7/7 + live 7/7; `validate_ai.py` re-run PASS (7/7 detected,
+  baseline calm, 0 negatives) so the feature_consumer change did not disturb detection.

@@ -45,6 +45,14 @@ from typing import Optional
 
 import redis
 
+# IR attack classifier — names the MITRE technique + builds the "why it fired"
+# rationale. Guarded so a classifier problem can never stop alerts from flowing.
+try:
+    from ir.attack_classifier import classify as _classify_attack
+except Exception:  # noqa: BLE001
+    def _classify_attack(_ev):  # type: ignore
+        return None
+
 LOG = logging.getLogger("alert_bridge")
 logging.basicConfig(
     level=os.environ.get("LAB_LOG_LEVEL", "INFO"),
@@ -59,12 +67,14 @@ ALERT_FILE = os.environ.get("LAB_AI_ALERT_FILE", "/var/lab/log/ai-alerts.json")
 SIG_ID_BASE = 9001000
 GID = 9000
 
-# Minimum seconds between writing alerts for the same category (dedup gate).
-# 60s collapses a burst/sustained event of one category into a single alert so
-# the IR engine opens one incident, not a stream. Lower via LAB_BRIDGE_COOLDOWN_S
-# only for back-to-back demo injections of the same attack type.
+# Minimum seconds between writing alerts for the same attack TYPE (dedup gate).
+# 60s collapses a burst/sustained event of one technique into a single alert so
+# the IR engine opens one incident, not a stream. Keyed on attack_type (not the
+# coarse category) so two DIFFERENT techniques seconds apart are not suppressed
+# into one — each gets its own MITRE-tagged incident. Lower via
+# LAB_BRIDGE_COOLDOWN_S only for back-to-back demo injections of the same type.
 ALERT_COOLDOWN_S = float(os.environ.get("LAB_BRIDGE_COOLDOWN_S", "60.0"))
-_last_written_ts: dict = {}  # category → last write timestamp
+_last_written_ts: dict = {}  # attack_type → last write timestamp
 
 _should_exit = False
 
@@ -184,18 +194,36 @@ def main() -> int:
                 LOG.warning("bad json on anomaly list: %r", payload[:120])
                 continue
 
-            # Deduplicate: skip writing if the same category was written recently.
             record = _eve(ev)
-            category = record["alert"]["category"]
+
+            # Classify the anomaly into a named, MITRE-tagged technique and attach
+            # the "why it fired" rationale. Additive: the legacy category stays.
+            cls = _classify_attack(ev)
+            if cls:
+                record["attack_type"] = cls["attack_type"]
+                record["confidence"] = cls["confidence"]
+                record["why"] = cls["why"]
+                record["mitre"] = {
+                    "id": cls["mitre_id"],
+                    "technique": cls["mitre_technique"],
+                    "tactic": cls["tactic"],
+                }
+                record["alert"]["attack_type"] = cls["attack_type"]
+                record["alert"]["label"] = cls["label"]
+                record["alert"]["mitre_id"] = cls["mitre_id"]
+                record["alert"]["mitre_technique"] = cls["mitre_technique"]
+
+            # Deduplicate per attack TYPE (fall back to category for unclassified).
+            dedup_key = (cls["attack_type"] if cls else None) or record["alert"]["category"]
             now_t = time.time()
-            if now_t - _last_written_ts.get(category, 0.0) < ALERT_COOLDOWN_S:
+            if now_t - _last_written_ts.get(dedup_key, 0.0) < ALERT_COOLDOWN_S:
                 LOG.debug(
-                    "alert suppressed by cooldown (cat=%s, remaining=%.0fs)",
-                    category,
-                    ALERT_COOLDOWN_S - (now_t - _last_written_ts.get(category, 0.0)),
+                    "alert suppressed by cooldown (key=%s, remaining=%.0fs)",
+                    dedup_key,
+                    ALERT_COOLDOWN_S - (now_t - _last_written_ts.get(dedup_key, 0.0)),
                 )
                 continue
-            _last_written_ts[category] = now_t
+            _last_written_ts[dedup_key] = now_t
 
             line = json.dumps(record, separators=(",", ":"))
             fh.write(line + "\n")

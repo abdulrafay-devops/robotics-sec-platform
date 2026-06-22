@@ -244,9 +244,22 @@ export interface IncidentAuditStep {
   stderr_tail?: string
 }
 
+export interface MitreTag {
+  id?: string
+  technique?: string
+  tactic?: string
+}
+
 export interface IncidentRecord {
   incident_id: string
   playbook: string
+  // Step 4 SOC fields (surfaced by the playbook engine alongside the raw event).
+  attack_type?: string
+  label?: string
+  mitre?: MitreTag
+  why?: string[]
+  confidence?: string
+  severity?: string
   event: Record<string, any>
   steps: IncidentAuditStep[]
   closed: boolean

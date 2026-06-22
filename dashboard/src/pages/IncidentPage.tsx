@@ -1,67 +1,63 @@
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
 import type { PrometheusMetrics } from '../types'
-import { AlertTriangle, BookOpen, Clock, BarChart3, X, Shield, Activity, RefreshCw, Check } from 'lucide-react'
+import { AlertTriangle, BookOpen, Clock, BarChart3, X, Shield, Activity, RefreshCw, Check, Target, ChevronDown, ChevronRight, Crosshair } from 'lucide-react'
 import { clsx } from 'clsx'
 import { usePendingApprovals, useIncidents, approveIncidentStep, PendingApproval, IncidentRecord } from '../hooks/useMetrics'
 
 interface Props { metrics: PrometheusMetrics | null }
 
-const PLAYBOOKS = [
+// SOC response catalog — one MITRE ATT&CK for ICS tagged playbook per attack
+// technique the AI plane detects. Mirrors vm-ai/ir/playbooks/*.md (the engine
+// that actually runs); kept here so the console shows the authoritative response
+// even when no incident is open.
+const PLAYBOOK_CATALOG = [
   {
-    id: 'PB-001',
-    trigger: 'IsolationForest score > 0.0',
-    title: 'AI Anomaly Detected',
-    severity: 'HIGH',
-    steps: [
-      'Prometheus fires "ai_anomaly" alert → Alertmanager webhook',
-      'Auto-capture: Zeek logs, Suricata events, Modbus pcap snapshot',
-      'Notify SOC via webhook (Slack/Teams/email)',
-      'If iforest_score > 0.5: trigger PB-003 (safe state)',
-      'Analyst reviews feature vector + top_features in Grafana',
-      'Triage: false positive → close | confirmed → escalate to PB-004',
-    ],
+    id: 'pb_command_injection', attack: 'modbus_command_injection', title: 'Modbus Command Injection',
+    mitre: 'T0855', technique: 'Unauthorized Command Message', tactic: 'Impair Process Control', severity: 'CRITICAL',
+    signature: 'Coil + cycle-register (MW0) writes from a non-HMI source',
+    steps: ['Capture Modbus stream + forensic snapshot (auto)', 'Isolate source — iptables DROP (auto)', 'Drop arm to ISO-10218 safety speed (human)', 'Assert latched safe state (human)', 'Verify control-program hash vs golden baseline', 'Post-mortem + close (human)'],
   },
   {
-    id: 'PB-002',
-    trigger: 'Suricata SID 99001 "OT:MODBUS anomalous write"',
-    title: 'Modbus Command Injection',
-    severity: 'CRITICAL',
-    steps: [
-      'Block source IP at OT-DMZ firewall (iptables rule)',
-      'Capture full Modbus stream to historian for 60s',
-      'Send E-STOP command via score_service /api/hmi/control',
-      'Alert: safety supervisor takes over PLC',
-      'Preserve forensic state: coil values, register snapshot',
-      'Initiate ICS-CERT notification if external attacker confirmed',
-    ],
+    id: 'pb_replay', attack: 'modbus_replay', title: 'Modbus Replay Attack',
+    mitre: 'T0831', technique: 'Manipulation of Control', tactic: 'Impair Process Control', severity: 'HIGH',
+    signature: 'Repeating FC6 writes to scratch regs MW10–13, off-baseline cadence',
+    steps: ['Capture replayed sequence + timing (auto)', 'Isolate source — iptables DROP (auto)', 'Drop arm to safety speed (human)', 'Rotate session keys so the capture cannot be re-used', 'Post-mortem + close (human)'],
   },
   {
-    id: 'PB-003',
-    trigger: 'safety_state register = 2 (EMERGENCY)',
-    title: 'Safety State Violation',
-    severity: 'CRITICAL',
-    steps: [
-      'SIS supervisor writes SAFE_STATE coil on PLC immediately',
-      'All motor/gripper/conveyor outputs set to FALSE',
-      'Physical E-STOP interlock activated via hardwired relay',
-      'Log event to historian with full PLC register snapshot',
-      'Page on-call safety engineer via alertmanager PagerDuty',
-      'Do NOT resume production until manual safety audit completes',
-    ],
+    id: 'pb_coil_flood', attack: 'coil_flood', title: 'Coil Flood / Denial of Service',
+    mitre: 'T0814', technique: 'Denial of Service', tactic: 'Inhibit Response Function', severity: 'HIGH',
+    signature: 'Very high-rate FC5 coil writes to a single point (scan-cycle starvation)',
+    steps: ['Capture rate + target coil (auto)', 'Isolate source — iptables DROP (auto)', 'Drop arm to safety speed while scan time recovers (human)', 'Rate-limit Modbus writes at OT gateway', 'Post-mortem + close (human)'],
   },
   {
-    id: 'PB-004',
-    trigger: 'Open incident count > 0 for > 5min',
-    title: 'Sustained Attack / Escalation',
-    severity: 'HIGH',
-    steps: [
-      'Isolate OT zone: drop all non-Modbus traffic at DMZ firewall',
-      'Preserve: all container logs, network pcaps, AI model scores',
-      'Notify ICS security team and plant manager',
-      'Stand up out-of-band management channel',
-      'Run forensic analysis: Zeek connection log + Suricata fast.log',
-      'Recover from golden config backup after incident close',
-    ],
+    id: 'pb_recon_scan', attack: 'recon_scan', title: 'OT Reconnaissance Scan',
+    mitre: 'T0846', technique: 'Remote System Discovery', tactic: 'Discovery', severity: 'MEDIUM',
+    signature: 'Broad FC3/FC1 read sweep across the map, no writes',
+    steps: ['Tag source, raise logging, alert analyst (auto)', 'Isolate source (human — read-only, low harm)', 'Restrict read scope at OT gateway', 'Post-mortem + close (human)'],
+  },
+  {
+    id: 'pb_safety_tamper', attack: 'safety_tamper', title: 'Safety / E-Stop Tampering',
+    mitre: 'T0880', technique: 'Loss of Safety', tactic: 'Impact', severity: 'CRITICAL',
+    signature: 'Writes to the e-stop coil + safety_state register (MW2)',
+    steps: ['Capture every safety-path write (auto)', 'Isolate source — iptables DROP (auto)', 'Assert latched safe state — arm freezes (human)', 'Verify hardwired relay out-of-band', 'Manual safety audit before resume', 'Post-mortem + close (human)'],
+  },
+  {
+    id: 'pb_setpoint_drift', attack: 'setpoint_drift', title: 'Stealthy Setpoint Drift',
+    mitre: 'T0836', technique: 'Modify Parameter', tactic: 'Impair Process Control', severity: 'HIGH',
+    signature: 'Slow, small writes to one setpoint register (MW4) — low & slow',
+    steps: ['Capture full value timeline of MW4 (auto)', 'Isolate source — iptables DROP (auto)', 'Drop arm to safety speed if it drives motion (human)', 'Restore setpoint from golden config', 'Post-mortem + close (human)'],
+  },
+  {
+    id: 'pb_bulk_write', attack: 'bulk_write', title: 'Unauthorized Bulk Register Write',
+    mitre: 'T0843', technique: 'Program Download', tactic: 'Lateral Movement', severity: 'CRITICAL',
+    signature: 'FC16 multi-register block write (baseline only writes singles)',
+    steps: ['Capture written block: range + values (auto)', 'Isolate source — iptables DROP (auto)', 'Assert safe state before logic runs on tampered memory (human)', 'Compare PLC image vs golden hash; roll back if changed', 'Post-mortem + close (human)'],
+  },
+  {
+    id: 'pb_robot_anomaly', attack: 'robot_behavior', title: 'Robot Joint-Dynamics Anomaly',
+    mitre: 'T0831', technique: 'Manipulation of Control', tactic: 'Impair Process Control', severity: 'HIGH',
+    signature: 'LSTM reconstruction error / physical-envelope breach on joint stream',
+    steps: ['Capture joint trace + envelope hits (auto)', 'Raise logging on robot plane (auto)', 'Drop arm to safety speed (human)', 'Assert safe state — arm freezes (human)', 'Re-home + supervised cycle before resume', 'Post-mortem + close (human)'],
   },
 ]
 
@@ -80,6 +76,25 @@ const SEV: Record<string, string> = {
   MEDIUM: 'badge-info',
 }
 
+// Resolve the SOC case view for an incident: prefer the fields the engine
+// surfaced (attack_type / label / mitre / why), and fall back to the catalog
+// entry for that attack_type so older incidents still render a technique.
+function incidentCase(inc: IncidentRecord) {
+  const attack = inc.attack_type || inc.event?.attack_type
+  const cat = PLAYBOOK_CATALOG.find(p => p.attack === attack)
+  const mitreId = inc.mitre?.id || cat?.mitre || ''
+  return {
+    attack,
+    label: inc.label || cat?.title || inc.event?.category || 'Unclassified anomaly',
+    mitreId,
+    technique: inc.mitre?.technique || cat?.technique || '',
+    tactic: inc.mitre?.tactic || cat?.tactic || '',
+    severity: (inc.severity || cat?.severity || '').toUpperCase(),
+    confidence: inc.confidence || '',
+    why: (inc.why && inc.why.length ? inc.why : (inc.event?.why || [])) as string[],
+  }
+}
+
 export function IncidentPage({ metrics }: Props) {
   const pending = usePendingApprovals(2000)
   const incidents = useIncidents(2000)
@@ -93,6 +108,7 @@ export function IncidentPage({ metrics }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [execResults, setExecResults] = useState<Record<string, { ok: boolean; msg: string; stdout?: string }>>({})
   const [showHistory, setShowHistory] = useState(false)
+  const [expandedInc, setExpandedInc] = useState<string | null>(null)
 
   // Only show active (non-closed) incidents by default; toggle reveals history
   const visibleIncidents = showHistory
@@ -302,76 +318,165 @@ export function IncidentPage({ metrics }: Props) {
             {showHistory ? 'No incidents logged yet.' : '✓ No active incidents — system nominal.'}
           </div>
         ) : (
-          <div className="overflow-x-auto max-h-72 overflow-y-auto">
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full text-xs font-mono">
               <thead>
                 <tr className="border-b border-border-dim text-slate-500 text-left">
+                  <th className="pb-2 pr-2 w-4"></th>
                   <th className="pb-2 pr-4">Incident ID</th>
+                  <th className="pb-2 pr-4">Technique (MITRE ATT&CK ICS)</th>
                   <th className="pb-2 pr-4">Playbook</th>
-                  <th className="pb-2 pr-4">Category</th>
-                  <th className="pb-2 pr-4">Mitigation Steps</th>
+                  <th className="pb-2 pr-4">Response Steps</th>
                   <th className="pb-2 pr-4">Status</th>
                   <th className="pb-2">Opened At</th>
                 </tr>
               </thead>
               <tbody>
-                {visibleIncidents.map((inc: IncidentRecord) => (
-                  <tr key={inc.incident_id} className={clsx(
-                    "border-b border-border-dim/20 hover:bg-slate-800/20",
-                    !inc.closed && "bg-red-950/10"
-                  )}>
-                    <td className="py-2 pr-4 text-slate-200 font-mono text-[10px]">{inc.incident_id}</td>
-                    <td className="py-2 pr-4 font-bold text-white">{inc.playbook}</td>
-                    <td className="py-2 pr-4 text-dmz-teal">{inc.event?.category || inc.event?.alert_type || 'system'}</td>
-                    <td className="py-2 pr-4 flex flex-wrap gap-1">
-                      {inc.steps?.map((step: any, idx: number) => (
-                        <span
-                          key={idx}
-                          title={`${step.step}: ${step.status}${step.rc !== undefined ? ` (rc=${step.rc})` : ''}`}
-                          className={clsx(
-                            "px-1.5 py-0.5 rounded text-[10px] font-mono",
-                            step.status === 'done'             ? 'bg-safe-green/20 text-safe-green border border-safe-green/30' :
-                            step.status === 'pending_approval' ? 'bg-ai-amber/20 text-ai-amber border border-ai-amber/30 animate-pulse' :
-                            step.status === 'rejected'         ? 'bg-slate-700 text-slate-400 border border-slate-600' :
-                                                                 'bg-ot-red/20 text-ot-red border border-ot-red/30'
+                {visibleIncidents.map((inc: IncidentRecord) => {
+                  const c = incidentCase(inc)
+                  const isOpen = expandedInc === inc.incident_id
+                  return (
+                    <Fragment key={inc.incident_id}>
+                      <tr
+                        onClick={() => setExpandedInc(isOpen ? null : inc.incident_id)}
+                        className={clsx(
+                          "border-b border-border-dim/20 hover:bg-slate-800/30 cursor-pointer",
+                          !inc.closed && "bg-red-950/10"
+                        )}
+                      >
+                        <td className="py-2 pr-2 text-slate-500">
+                          {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                        </td>
+                        <td className="py-2 pr-4 text-slate-200 font-mono text-[10px]">{inc.incident_id}</td>
+                        <td className="py-2 pr-4">
+                          <div className="flex items-center gap-1.5">
+                            {c.mitreId && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-ot-red/15 text-ot-red border border-ot-red/30">{c.mitreId}</span>
+                            )}
+                            <span className="text-white font-semibold normal-case">{c.label}</span>
+                          </div>
+                          {c.technique && (
+                            <div className="text-[9.5px] text-slate-500 mt-0.5 normal-case">{c.technique} · {c.tactic}</div>
                           )}
-                        >
-                          {step.step}
-                        </span>
-                      ))}
-                    </td>
-                    <td className="py-2 pr-4">
-                      {inc.closed
-                        ? <span className="badge badge-info">Closed</span>
-                        : <span className="badge badge-critical animate-pulse">Active</span>}
-                    </td>
-                    <td className="py-2 text-slate-500">{new Date(inc.opened_at).toLocaleString()}</td>
-                  </tr>
-                ))}
+                        </td>
+                        <td className="py-2 pr-4 text-dmz-teal text-[10px]">{inc.playbook}</td>
+                        <td className="py-2 pr-4">
+                          <div className="flex flex-wrap gap-1">
+                            {inc.steps?.map((step: any, idx: number) => (
+                              <span
+                                key={idx}
+                                title={`${step.step}: ${step.status}${step.rc !== undefined ? ` (rc=${step.rc})` : ''}`}
+                                className={clsx(
+                                  "px-1.5 py-0.5 rounded text-[10px] font-mono",
+                                  step.status === 'done'             ? 'bg-safe-green/20 text-safe-green border border-safe-green/30' :
+                                  step.status === 'pending_approval' ? 'bg-ai-amber/20 text-ai-amber border border-ai-amber/30 animate-pulse' :
+                                  step.status === 'rejected'         ? 'bg-slate-700 text-slate-400 border border-slate-600' :
+                                                                       'bg-ot-red/20 text-ot-red border border-ot-red/30'
+                                )}
+                              >
+                                {step.step}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-2 pr-4">
+                          {inc.closed
+                            ? <span className="badge badge-info">Closed</span>
+                            : <span className="badge badge-critical animate-pulse">Active</span>}
+                        </td>
+                        <td className="py-2 text-slate-500 text-[10px]">{new Date(inc.opened_at).toLocaleString()}</td>
+                      </tr>
+                      {isOpen && (
+                        <tr className="bg-slate-900/50">
+                          <td colSpan={7} className="px-4 py-3">
+                            <div className="grid grid-cols-3 gap-4">
+                              {/* Why it fired */}
+                              <div className="col-span-2">
+                                <div className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-ai-amber mb-1.5">
+                                  <Crosshair size={12} /> Why this fired
+                                </div>
+                                {c.why && c.why.length > 0 ? (
+                                  <ul className="space-y-1">
+                                    {c.why.map((w, i) => (
+                                      <li key={i} className="flex items-start gap-2 text-[11px] text-slate-300">
+                                        <span className="text-slate-600 mt-0.5">▸</span>
+                                        <span className="leading-snug">{w}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <div className="text-[11px] text-slate-500">No rationale recorded for this incident.</div>
+                                )}
+                              </div>
+                              {/* Case metadata */}
+                              <div>
+                                <div className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-dmz-teal mb-1.5">
+                                  <Target size={12} /> Case
+                                </div>
+                                <dl className="space-y-1 text-[11px]">
+                                  <div className="flex justify-between gap-2"><dt className="text-slate-500">Technique</dt><dd className="text-white font-mono">{c.mitreId || '—'}</dd></div>
+                                  <div className="flex justify-between gap-2"><dt className="text-slate-500">Tactic</dt><dd className="text-slate-300 text-right">{c.tactic || '—'}</dd></div>
+                                  <div className="flex justify-between gap-2"><dt className="text-slate-500">Severity</dt><dd>{c.severity ? <span className={clsx('badge', SEV[c.severity] ?? 'badge-info')}>{c.severity}</span> : '—'}</dd></div>
+                                  <div className="flex justify-between gap-2"><dt className="text-slate-500">Confidence</dt><dd className="text-slate-300">{c.confidence || '—'}</dd></div>
+                                  <div className="flex justify-between gap-2"><dt className="text-slate-500">Source</dt><dd className="text-slate-300 font-mono">{inc.event?.src_ip || '—'}</dd></div>
+                                </dl>
+                              </div>
+                            </div>
+                            {/* Response timeline */}
+                            <div className="mt-3 pt-3 border-t border-border-dim/40">
+                              <div className="text-[10px] uppercase font-bold text-slate-500 mb-1.5">Response timeline</div>
+                              <div className="space-y-1">
+                                {inc.steps?.map((step: any, idx: number) => (
+                                  <div key={idx} className="flex items-center gap-2 text-[10.5px]">
+                                    <span className="text-slate-600 font-mono w-4">{idx + 1}.</span>
+                                    <span className="text-slate-200 font-mono w-40">{step.step}</span>
+                                    <span className={clsx(
+                                      "px-1.5 py-0.5 rounded text-[9.5px] font-mono",
+                                      step.status === 'done'             ? 'bg-safe-green/15 text-safe-green' :
+                                      step.status === 'pending_approval' ? 'bg-ai-amber/15 text-ai-amber' :
+                                      step.status === 'rejected'         ? 'bg-slate-700 text-slate-400' :
+                                                                           'bg-ot-red/15 text-ot-red'
+                                    )}>
+                                      {step.status}{step.rc !== undefined ? ` (rc=${step.rc})` : ''}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      {/* Incident playbooks */}
+      {/* Per-attack response playbooks (MITRE ATT&CK for ICS) */}
       <div>
         <div className="flex items-center gap-2 mb-3">
           <BookOpen size={14} className="text-ai-amber" />
-          <span className="text-sm font-semibold text-white">Automated Response Playbooks</span>
+          <span className="text-sm font-semibold text-white">Response Playbooks — one per attack technique</span>
+          <span className="text-[10px] font-mono text-slate-600 normal-case">MITRE ATT&amp;CK for ICS · graded auto/human containment</span>
         </div>
         <div className="grid grid-cols-2 gap-4">
-          {PLAYBOOKS.map(pb => (
-            <div key={pb.id} className={clsx('card', pb.severity === 'CRITICAL' ? 'border-red-900/60' : 'border-amber-900/40')}>
+          {PLAYBOOK_CATALOG.map(pb => (
+            <div key={pb.id} className={clsx('card', pb.severity === 'CRITICAL' ? 'border-red-900/60' : pb.severity === 'HIGH' ? 'border-amber-900/40' : 'border-border-dim')}>
               <div className="flex items-start gap-2 mb-2">
-                <span className="font-mono text-[10px] text-slate-500 flex-shrink-0 mt-0.5">{pb.id}</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-ot-red/15 text-ot-red border border-ot-red/30 flex-shrink-0 mt-0.5">{pb.mitre}</span>
                 <div className="flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-bold text-white">{pb.title}</span>
                     <span className={clsx('badge', SEV[pb.severity] ?? 'badge-info')}>{pb.severity}</span>
                   </div>
                   <div className="text-[10px] font-mono text-slate-500 mt-0.5">
-                    Trigger: <span className="text-dmz-teal">{pb.trigger}</span>
+                    {pb.technique} · <span className="text-slate-400">{pb.tactic}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    Detects: <span className="text-dmz-teal">{pb.signature}</span>
                   </div>
                 </div>
               </div>

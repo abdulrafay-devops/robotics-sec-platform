@@ -149,11 +149,25 @@ def _load_playbooks() -> list[dict]:
 # --- trigger matching --------------------------------------------------
 
 def _match_triggers(event: dict, playbooks: list[dict]) -> dict | None:
-    """Return the first playbook whose triggers match the event."""
-    for pb in playbooks:
-        for trig in pb.get('triggers', []):
-            if all(event.get(k) == v for k, v in trig.items()):
-                return pb
+    """Return the best playbook whose triggers match the event.
+
+    Two passes so a precise, per-technique playbook always wins over a legacy
+    category-only one:
+      pass 1 — triggers that pin a specific ``attack_type`` (the MITRE-tagged
+               per-attack playbooks added in Step 4);
+      pass 2 — broader category-only triggers act as the fallback.
+    """
+    def _matches(trig: dict) -> bool:
+        return all(event.get(k) == v for k, v in trig.items())
+
+    for specific in (True, False):
+        for pb in playbooks:
+            for trig in pb.get('triggers', []):
+                has_attack_type = 'attack_type' in trig
+                if has_attack_type != specific:
+                    continue
+                if _matches(trig):
+                    return pb
     return None
 
 
@@ -259,9 +273,20 @@ def _tail_ai_alerts(start_offset: int) -> tuple[int, list[dict]]:
                 alert_dict.get('signature') or
                 'unknown'
             )
+            # Step 4: the alert now carries a named MITRE technique + rationale.
+            attack_type = rec.get('attack_type') or alert_dict.get('attack_type')
+            mitre = rec.get('mitre') if isinstance(rec.get('mitre'), dict) else {
+                'id': alert_dict.get('mitre_id'),
+                'technique': alert_dict.get('mitre_technique'),
+            }
             events.append({
                 'source': 'ai_alerts',
                 'category': category,
+                'attack_type': attack_type,
+                'label': alert_dict.get('label') or attack_type or category,
+                'mitre': mitre,
+                'why': rec.get('why') or [],
+                'confidence': rec.get('confidence'),
                 'src_ip': rec.get('src_ip') or rec.get('orig_h'),
                 'severity': alert_dict.get('severity'),
                 'raw': rec,
@@ -341,8 +366,12 @@ def _handle(event: dict, playbooks: list[dict]) -> None:
     # committed, so after the first incident every subsequent attack of the same
     # type was silently dropped. Now we allow a new incident after 5 minutes.
     LESSONS_BLOCK_TIMEOUT_S = 300
+    # Identity for de-dup: the precise MITRE technique when available, else the
+    # coarse category. This is what makes two DIFFERENT attacks open two incidents
+    # while a single sustained attack still folds into one.
+    event_identity = event.get('attack_type') or event.get('category')
     try:
-        if INCIDENTS_LOG.exists() and event.get('category'):
+        if INCIDENTS_LOG.exists() and event_identity:
             with INCIDENTS_LOG.open('r') as fh:
                 for line in fh:
                     try:
@@ -351,7 +380,9 @@ def _handle(event: dict, playbooks: list[dict]) -> None:
                         continue
                     if rec.get('blocked', False):
                         continue
-                    if rec.get('event', {}).get('category') == event.get('category'):
+                    rec_identity = (rec.get('event', {}).get('attack_type')
+                                    or rec.get('event', {}).get('category'))
+                    if rec_identity == event_identity:
                         if not rec.get('postmortem_committed', False):
                             # Check if the block has expired
                             opened_at_str = rec.get('opened_at', '')
@@ -413,6 +444,12 @@ def _handle(event: dict, playbooks: list[dict]) -> None:
                         if (rec.get('blocked') or rec.get('merged')
                                 or rec.get('postmortem_committed')):
                             continue
+                        # Only fold into a campaign of the SAME technique; a
+                        # different attack arriving in the window is its own incident.
+                        rec_identity = (rec.get('event', {}).get('attack_type')
+                                        or rec.get('event', {}).get('category'))
+                        if rec_identity != event_identity:
+                            continue
                         try:
                             ts = dt.datetime.fromisoformat(
                                 rec.get('opened_at', '').replace('Z', '')
@@ -464,6 +501,14 @@ def _handle(event: dict, playbooks: list[dict]) -> None:
     _record_incident({
         'incident_id': incident_id,
         'playbook': pb['id'],
+        # Surfaced fields so the SOC console can render the case without re-parsing
+        # the nested event (MITRE label + analyst rationale + technique tags).
+        'attack_type': event.get('attack_type'),
+        'label': event.get('label'),
+        'mitre': event.get('mitre') or {},
+        'why': event.get('why') or [],
+        'confidence': event.get('confidence'),
+        'severity': pb.get('severity') or event.get('severity'),
         'event': event,
         'steps': audit,
         'closed': overall,

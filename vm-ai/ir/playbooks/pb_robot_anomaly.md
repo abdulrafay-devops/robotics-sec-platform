@@ -1,9 +1,15 @@
 ---
 id: pb_robot_anomaly
 title: Anomalous robot joint dynamics (behavior plane)
+attack_type: robot_behavior
+mitre_id: T0831
+mitre_technique: Manipulation of Control
+tactic: Impair Process Control
 severity: high
 nist_phases: [Detection, Analysis, Containment, Eradication, Recovery, Lessons-Learned]
 triggers:
+  - source: ai_alerts
+    attack_type: robot_behavior
   - source: ai_alerts
     category: robot-behavior-anomaly
 steps:

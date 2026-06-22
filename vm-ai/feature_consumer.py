@@ -43,6 +43,52 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 
+# Modbus write function codes (for the per-alert protocol fingerprint below).
+_COIL_WRITE_FC = {5, 15}
+_REG_WRITE_FC = {6, 16}
+_READ_FC = {1, 2, 3, 4}
+
+
+def _fingerprint(rows, window_s: float = 5.0) -> dict:
+    """Exact per-window Modbus protocol summary, attached to anomaly alerts.
+
+    This is ADDITIVE metadata only — it never touches scoring, thresholds, or the
+    anomaly decision. The IR attack_classifier reads it to name the technique and
+    explain *why* an alert fired from the observed function codes / addresses, the
+    same fields a SOC analyst would read off the wire. Guarded by the caller; this
+    helper itself is total and returns a best-effort dict.
+
+    Note on the wire: this Zeek Modbus decoder does NOT parse the write *payload*
+    (FC16 logs address/quantity as 0) and emits a spurious address-0 companion row
+    per write. So the classifier keys on robust signals — coil-vs-register split,
+    the function codes, and the *set* of write addresses (where addr 0 is treated
+    as low-information) — never on quantity or a single min address.
+    """
+    reqs = [r for r in rows if getattr(r, "is_request", True)]
+    coil_w = [r for r in reqs if r.func_code in _COIL_WRITE_FC]
+    reg_w = [r for r in reqs if r.func_code in _REG_WRITE_FC]
+    writes = coil_w + reg_w
+    reads = [r for r in reqs if r.func_code in _READ_FC]
+    coil_addrs = sorted({int(r.address) for r in coil_w})
+    reg_addrs = sorted({int(r.address) for r in reg_w})
+    write_fcs = sorted({int(r.func_code) for r in writes})
+    return {
+        "n_req": len(reqs),
+        "n_read": len(reads),
+        "n_write": len(writes),
+        "n_coil_write": len(coil_w),
+        "n_reg_write": len(reg_w),
+        "fcs": sorted({int(r.func_code) for r in reqs}),
+        "write_fcs": write_fcs,
+        "coil_addrs": coil_addrs[:16],
+        "reg_addrs": reg_addrs[:16],
+        "max_coil_addr": max(coil_addrs, default=-1),
+        "max_reg_addr": max(reg_addrs, default=-1),
+        "has_block_write": bool({15, 16} & set(write_fcs)),
+        "write_rate": round(len(writes) / window_s, 2),
+        "read_rate": round(len(reads) / window_s, 2),
+    }
+
 REDIS_HOST = os.environ.get("LAB_REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("LAB_REDIS_PORT", "6379"))
 REDIS_PASSWORD = os.environ.get("LAB_REDIS_PASSWORD", "")
@@ -328,6 +374,13 @@ def main() -> int:
                         _last_alert_ts[src] = now_t
                         _consecutive[src] = 0  # reset after alerting
                         event["dst_ip"] = bucket.rows[0].dst_ip if bucket.rows else None
+                        # Attach the protocol fingerprint so the IR layer can name
+                        # the technique + explain why it fired. Best-effort: a
+                        # fingerprint failure must never block the alert.
+                        try:
+                            event["fingerprint"] = _fingerprint(bucket.rows)
+                        except Exception as exc:  # noqa: BLE001
+                            LOG.debug("fingerprint failed: %s", exc)
                         r.rpush(ANOMALY_LIST, json.dumps(event))
                         LOG.info(
                             "ANOMALY src=%s win=%.1f if=%.4f pcaZ=%s top=%s",
