@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import random
 import signal
 import sys
 import time
@@ -137,21 +138,28 @@ def main(argv: List[str]) -> int:
         while not _SHOULD_EXIT:
             t0 = time.monotonic()
             try:
-                # FC=03 Read Holding Registers, count = max addr + 1
-                count = max(args.registers) + 1
-                rr = client.read_holding_registers(
-                    address=0, count=count, slave=args.unit_id,
-                )
-                if rr.isError():
-                    polls_err += 1
-                    LOG.warning('read returned error: %s', rr)
+                # Realistic HMI scan profile. A real operator panel reads SEVERAL
+                # register groups per refresh, and now and then a wider diagnostic
+                # sweep — so the captured windows have genuine multi-dimensional
+                # structure (varying address span, quantity, read count) instead of one
+                # flat block. That is what lets the PCA/IsolationForest learn a real
+                # "normal" rather than degenerate on a rank-1 baseline. All reads are
+                # FC=03, READ-ONLY, and inside the valid holding-register range MW0..63.
+                roll = random.random()
+                if roll < 0.12:
+                    reads = [(0, 5), (10, 3), (0, 32)]   # routine + periodic diagnostic sweep
+                elif roll < 0.32:
+                    reads = [(0, 5)]                       # light scan (telemetry only)
                 else:
-                    polls_ok += 1
-                    LOG.debug(
-                        'regs[%s] = %s',
-                        ','.join(str(r) for r in args.registers),
-                        [rr.registers[i] for i in args.registers],
-                    )
+                    reads = [(0, 5), (10, 3)]             # routine: telemetry MW0-4 + safety MW10-12
+                ok_this = True
+                for _addr, _cnt in reads:
+                    rr = client.read_holding_registers(address=_addr, count=_cnt, slave=args.unit_id)
+                    if rr.isError():
+                        ok_this = False
+                        LOG.warning('read returned error: %s', rr)
+                polls_ok += int(ok_this)
+                polls_err += int(not ok_this)
             except Exception as exc:  # noqa: BLE001
                 polls_err += 1
                 LOG.warning('exception during read: %s', exc)

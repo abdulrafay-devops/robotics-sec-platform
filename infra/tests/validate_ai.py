@@ -24,26 +24,34 @@ except Exception:
 
 AI = "container-ai"
 SEC = "container-sec"
+PLC = "192.168.10.10"
+PY = "/opt/lab/venv-shipper/bin/python"
+TRAFFIC = "/opt/lab/vm-ot/traffic"
 
-# Attack library — name (with MITRE ATT&CK for ICS id) -> SEC attack-watcher params.
-# (Expanded to the full ~6-8 set in Step 2; these 3 are wired today.)
+# Attack library (~6-8), each tagged with MITRE ATT&CK for ICS. "trigger" attacks go
+# through SEC's attack-watcher (attack_trigger.json); "extra" attacks run the
+# parameterised attack_modbus_extra.py directly. (dur, rate) in seconds / Hz.
 ATTACKS = [
-    ("Command injection (T0855)",      "modbus_command_injection", 25, 10),
-    ("Replay (T0831)",                 "modbus_replay",            22, 5),
-    ("Coil/register flood / DoS (T0814)", "coil_flood",            22, 40),
+    ("Command injection (T0855)",       "trigger", "modbus_command_injection", 18, 10),
+    ("Replay (T0831)",                  "trigger", "modbus_replay",            18, 5),
+    ("Coil/register flood / DoS (T0814)", "trigger", "coil_flood",             18, 40),
+    ("Recon scan (T0846)",              "extra",   "recon",                    18, 12),
+    ("Safety / E-stop tampering (T0880)", "extra", "estop",                    18, 8),
+    ("Stealthy setpoint drift (T0836)", "extra",   "drift",                    22, 2),
+    ("Unauthorized bulk write (T0843)", "extra",   "bulk",                     18, 8),
 ]
 
-BASELINE_READS = 8        # ~40s of steady baseline
+BASELINE_READS = 8
 BASELINE_INTERVAL = 5
-ATTACK_POLLS = 7          # ~35s window to catch the attack
+ATTACK_POLLS = 7
 ATTACK_POLL_INTERVAL = 5
-CLEAR_WAIT = 25           # let the attack finish + baseline return before the next
+CLEAR_WAIT = 22
 
 
-def _dexec(container: str, cmd: str, timeout: int = 30):
+def _dexec(container, cmd, timeout=30, detach=False):
+    args = ["docker", "exec"] + (["-d"] if detach else []) + [container, "sh", "-c", cmd]
     try:
-        return subprocess.run(["docker", "exec", container, "sh", "-c", cmd],
-                              capture_output=True, text=True, timeout=timeout)
+        return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return None
 
@@ -58,35 +66,38 @@ def _score() -> dict:
         return {}
 
 
-def _trigger(attack_type: str, dur: int, rate: int) -> None:
-    payload = '{"attack_type":"%s","duration_s":%d,"rate_hz":%d}' % (attack_type, dur, rate)
-    _dexec(SEC, "echo '%s' > /var/lab/state/attack_trigger.json" % payload)
+def _launch(method, key, dur, rate):
+    if method == "trigger":
+        payload = '{"attack_type":"%s","duration_s":%d,"rate_hz":%d}' % (key, dur, rate)
+        _dexec(SEC, "echo '%s' > /var/lab/state/attack_trigger.json" % payload)
+    else:  # extra
+        _dexec(SEC, "%s %s/attack_modbus_extra.py --host %s --mode %s --duration-s %d --rate-hz %d"
+               % (PY, TRAFFIC, PLC, key, dur, rate), detach=True)
 
 
 def main() -> int:
     print("=" * 70)
-    print(" AI VALIDATION HARNESS — live baseline-calm + attack-detection gate")
+    print(" AI VALIDATION HARNESS - live baseline-calm + attack-detection gate")
     print("=" * 70)
 
-    # ---- 1. Baseline must be calm (no false alarms) ----
-    print("\n[1] BASELINE — expect calm (anomaly=false every read):")
-    false_alarms = 0
+    print("\n[1] BASELINE - expect calm (anomaly=false, scores >= 0):")
+    false_alarms = neg = 0
     for _ in range(BASELINE_READS):
         s = _score()
         anom = bool(s.get("anomaly"))
+        pca, tf = s.get("pca_z", 0) or 0, s.get("tf_z", 0) or 0
         false_alarms += anom
-        print("    if=%.3f pca=%.2f tf=%.2f  anomaly=%s"
-              % (s.get("iforest_score", 0) or 0, s.get("pca_z", 0) or 0,
-                 s.get("tf_z", 0) or 0, anom))
+        neg += (pca < 0 or tf < 0)
+        print("    if=%.3f pca=%.2f tf=%.2f  anomaly=%s" % (s.get("iforest_score", 0) or 0, pca, tf, anom))
         time.sleep(BASELINE_INTERVAL)
-    baseline_ok = (false_alarms == 0)
-    print("    -> baseline %s (%d false alarm(s))" % ("CALM" if baseline_ok else "NOISY", false_alarms))
+    baseline_ok = (false_alarms == 0 and neg == 0)
+    print("    -> %s (%d false alarm(s), %d negative score(s))"
+          % ("CALM" if baseline_ok else "PROBLEM", false_alarms, neg))
 
-    # ---- 2. Every attack must be detected ----
-    print("\n[2] ATTACKS — expect each DETECTED (anomaly=true):")
+    print("\n[2] ATTACKS - expect each DETECTED (anomaly=true):")
     results = []
-    for name, atype, dur, rate in ATTACKS:
-        _trigger(atype, dur, rate)
+    for name, method, key, dur, rate in ATTACKS:
+        _launch(method, key, dur, rate)
         detected, peak = False, {}
         for _ in range(ATTACK_POLLS):
             time.sleep(ATTACK_POLL_INTERVAL)
@@ -94,28 +105,22 @@ def main() -> int:
             if s.get("anomaly"):
                 detected, peak = True, s
                 break
-        if detected:
-            print("    %-34s DETECTED  (pca=%.0f tf=%.0f if=%.2f)"
-                  % (name, peak.get("pca_z", 0) or 0, peak.get("tf_z", 0) or 0,
-                     peak.get("iforest_score", 0) or 0))
-        else:
-            print("    %-34s MISSED" % name)
+        tag = ("DETECTED  (pca=%.0f tf=%.0f if=%.2f)"
+               % (peak.get("pca_z", 0) or 0, peak.get("tf_z", 0) or 0, peak.get("iforest_score", 0) or 0)
+               ) if detected else "MISSED"
+        print("    %-36s %s" % (name, tag))
         results.append((name, detected))
-        time.sleep(CLEAR_WAIT)  # let it finish + clear before the next attack
+        time.sleep(CLEAR_WAIT)
 
-    # ---- 3. Verdict ----
-    print("\n" + "=" * 70)
-    print(" RESULT")
-    print("=" * 70)
-    print("  baseline calm:        %s (%d false alarms)"
-          % ("PASS" if baseline_ok else "FAIL", false_alarms))
+    print("\n" + "=" * 70 + "\n RESULT\n" + "=" * 70)
     detected_n = sum(1 for _, d in results if d)
-    print("  attacks detected:     %d / %d" % (detected_n, len(results)))
+    print("  baseline calm + non-negative: %s (%d false alarms, %d negatives)"
+          % ("PASS" if baseline_ok else "FAIL", false_alarms, neg))
+    print("  attacks detected:             %d / %d" % (detected_n, len(results)))
     for name, d in results:
-        print("      %-34s %s" % (name, "OK" if d else "MISS"))
+        print("      %-36s %s" % (name, "OK" if d else "MISS"))
     overall = baseline_ok and detected_n == len(results)
-    print("\n  OVERALL: %s" % ("PASS - safe to promote models" if overall
-                               else "FAIL - do NOT promote"))
+    print("\n  OVERALL: %s" % ("PASS - safe to promote models" if overall else "FAIL - do NOT promote"))
     return 0 if overall else 1
 
 

@@ -63,7 +63,13 @@ change; only promote if it PASSES. (Chose a live harness over offline replay bec
 the live pipeline — most faithful. Note: it currently triggers the 3 attack types SEC's watcher
 knows; Step 2 extends the attack set + the harness's ATTACKS list.)
 
-**Step 2 — Realistic scenario + 6–8 attack library (MITRE-tagged).**  STATUS: ⬜ not started
+**Step 2 — Realistic scenario + 6–8 attack library (MITRE-tagged).**  STATUS: ✅ DONE (2026-06-22)
+`modbus_normal.py` now does a realistic multi-block HMI scan (telemetry MW0-4 + safety MW10-12 +
+occasional MW0-31 diagnostic sweep, read-only, in-range) → real window variance. Attack library =
+**7 attacks**: 3 via SEC's trigger (injection T0855, replay T0831, flood T0814) + 4 in the new
+`vm-ot/traffic/attack_modbus_extra.py` (recon T0846, e-stop tamper T0880, stealthy drift T0836,
+bulk write T0843), all wired into `validate_ai.py`. NOTE: capture flood-guard raised (msg_rate>120)
+since the dense read baseline is legit (write-attacks are excluded by the write_ratio guard).
 - Richer "normal": `modbus_normal.py` polls **varied** register groups at realistic rates with
   natural variation, so the baseline is no longer rank-1 (this fixes the PCA/iforest brittleness
   at the source). NOTE: enriching the baseline **forces a retrain (Step 3)** — do NOT deploy the
@@ -74,7 +80,14 @@ knows; Step 2 extends the attack set + the harness's ATTACKS list.)
   malicious logic / unauthorized program (T0843/T0889), E-stop / safety-state tampering (T0858/
   T0880), stealthy setpoint drift (T0836), out-of-bounds / spoofed-value write (T0856/T0832).
 
-**Step 3 — Trustworthy detection (retrain behind the harness).**  STATUS: ⬜ not started
+**Step 3 — Trustworthy detection (retrain behind the harness).**  STATUS: ✅ DONE (2026-06-22)
+Retrained all 3 Modbus models on the enriched live baseline (85 windows). `validate_ai.py` PASSED:
+baseline CALM (0 false alarms, 0 negative scores), **7/7 attacks detected** (pca peaks 2.7k–743k,
+even the stealthy drift + recon). Promoted; backed up in parent `_model_backup_amazing/`. iforest
+gate auto-calibrated to 0.3951 (max×1.25) → dashboard threat/iforest thresholds realigned to 0.40.
+NOTE: PCA is still mathematically degenerate even enriched (single-arm Modbus features are inherently
+correlated → low rank → linear PCA reconstructs perfectly); the std-floor keeps it usable and it
+still fires hard on attacks. The TF AE + IsolationForest are the real detectors.
 Retrain on the richer baseline; validate against the WHOLE attack library via Step 1; only
 promote if PASS. Add **explainability** to alerts ("fired because writes jumped 40× from a
 non-OT source"). Result: calm baseline, every attack caught, sensitive models.
@@ -110,3 +123,9 @@ the PCA non-degenerate.
   in the harness's ATTACKS list + MITRE tags. **Then Step 3** retrains on the richer baseline and
   must PASS `validate_ai.py` before promotion. REMEMBER: richer baseline + retrain are coupled —
   develop off the live path, promote atomically only after the harness passes (never break the demo).
+- **2026-06-22** — **Steps 2 + 3 DONE + non-negative scores DONE.** Enriched generator + 7-attack
+  MITRE library + retrain on the 85-window enriched baseline → `validate_ai.py` **PASS: baseline
+  calm, 0 negatives, 7/7 attacks detected**. Dashboard realigned (iforest gate 0.40) + rebuilt;
+  validated models backed up in `_model_backup_amazing/`. **Only Step 4 remains** (SOC-grade
+  response: playbook-per-attack + incident/case view + ATT&CK labels + analyst approve/reject).
+  Detection plane is now demo-grade: baseline NOMINAL + non-negative + all 7 attacks caught.

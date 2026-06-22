@@ -25,7 +25,10 @@ def _clean(v: np.ndarray) -> bool:
     if g("n_exceptions") > 0:       return False
     if g("n_external_writes") > 0:  return False
     if g("write_ratio") > 0.05:     return False
-    if g("msg_rate") > 40:          return False   # exclude flood
+    # The realistic multi-block HMI baseline is read-heavy and fairly dense
+    # (msg_rate ~40). Only exclude EXTREME volume (a real flood is writes anyway,
+    # already excluded above); otherwise we'd wrongly drop the normal dense windows.
+    if g("msg_rate") > 120:         return False
     return True
 
 
