@@ -363,18 +363,19 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
   ]
 
   return (
-    <div className="h-full flex flex-col overflow-hidden" style={{ background: '#060a10' }}>
+    <div className="h-full flex flex-col overflow-hidden" style={{ background: '#070b11' }}>
 
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className={clsx(
-        'flex-shrink-0 flex items-center gap-3 px-5 py-3 border-b border-slate-800/80',
+        'flex-shrink-0 border-b border-slate-800/80',
         injActive && 'border-b-red-900/60',
       )}>
-        <Brain size={16} className="text-blue-400 flex-shrink-0" />
+        <div className="max-w-[1500px] mx-auto flex items-center gap-3 px-6 py-3.5">
+        <Brain size={16} className="text-slate-300 flex-shrink-0" />
         <div className="leading-tight">
-          <h1 className="text-[15px] font-bold text-white tracking-tight">AI Anomaly Detection Engine</h1>
-          <p className="text-[9.5px] text-slate-600 font-mono mt-0.5">
-            IsolationForest · PCA · TensorFlow AE · Robot LSTM (joint dynamics)
+          <h1 className="text-lg font-semibold text-white tracking-tight">AI Anomaly Detection</h1>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            Dual-plane ML — IsolationForest · PCA · TensorFlow autoencoder · robot LSTM joint-dynamics
           </p>
         </div>
 
@@ -407,10 +408,12 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
             <span className="text-[10px] font-mono text-amber-300">INJECTION COMPLETE</span>
           </div>
         )}
+        </div>
       </div>
 
       {/* ── Body ────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-[1500px] mx-auto p-6 space-y-4">
 
         {/* Row 1a — Model Gauges (3 network-plane + 1 robot-plane) */}
         <div className="grid grid-cols-4 gap-3">
@@ -739,6 +742,7 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
           </div>
         </div>
 
+        </div>
       </div>
     </div>
   )
