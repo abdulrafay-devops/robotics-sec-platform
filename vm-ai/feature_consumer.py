@@ -33,9 +33,12 @@ from model.features import (
     FEATURE_NAMES,
     FEATURE_VERSION,
     RawRow,
+    WindowBucket,
     WindowStore,
+    WINDOW_SECONDS,
     resolve_if_threshold,
 )
+from collections import deque
 
 LOG = logging.getLogger("feature_consumer")
 logging.basicConfig(
@@ -96,6 +99,12 @@ RAW_LIST = os.environ.get("LAB_REDIS_RAW_LIST", "lab.modbus.features.raw")
 ANOMALY_LIST = os.environ.get("LAB_REDIS_ANOMALY_LIST", "lab.anomaly.events")
 MODELS_DIR = os.environ.get("LAB_MODELS_DIR", "/opt/lab/models")
 FLUSH_PERIOD_S = float(os.environ.get("LAB_FLUSH_PERIOD_S", "1.0"))
+# Fast live-display path: every DISPLAY_PERIOD_S the consumer scores a SLIDING
+# trailing window and writes positive "activity" telemetry to LIVE_ACTIVITY_FILE,
+# so the dashboard gauges move every ~2s. This is display-only and completely
+# separate from the 5s tumbling-window path that drives anomaly alerts/incidents.
+DISPLAY_PERIOD_S = float(os.environ.get("LAB_DISPLAY_PERIOD_S", "2.0"))
+LIVE_ACTIVITY_FILE = os.environ.get("LAB_LIVE_ACTIVITY_FILE", "/var/lab/state/live_activity.json")
 
 # Anomaly gate parameters — tunable via env vars.
 # IsolationForest alert threshold resolution (see _Scorer._resolve_if_threshold):
@@ -202,10 +211,21 @@ class _Scorer:
     def score(self, x: np.ndarray) -> dict:
         xs = self.scaler.transform(x.reshape(1, -1))
 
+        # Always-positive "activity" telemetry for the live dashboard (separate from
+        # the floored detection scores below). These are the RAW model outputs, so
+        # they show a small positive baseline that jitters every window and spikes on
+        # an attack — nothing fabricated. if_activity centres ~0.4 (boundary 0.5);
+        # the AE activities are reconstruction-error "x normal" (≈1.0 on baseline).
+        if_activity: Optional[float] = None
+        pca_activity: Optional[float] = None
+        tf_activity: Optional[float] = None
+
         # ── IsolationForest ────────────────────────────────────────────────
         if_score: Optional[float] = None
         if self.iforest is not None:
-            if_score = max(0.0, float(-self.iforest.decision_function(xs)[0]))
+            df = float(self.iforest.decision_function(xs)[0])
+            if_score = max(0.0, -df)              # detection score (floored)
+            if_activity = round(0.5 - df, 4)       # display: ~0.4 baseline, >0.9 on attack
 
         # ── PCA Autoencoder z-score ────────────────────────────────────────
         pca_z: Optional[float] = None
@@ -215,6 +235,7 @@ class _Scorer:
             pca_z = (err - self.pca_thr["baseline_recon_mean"]) / max(
                 self.pca_thr["baseline_recon_std"], 1e-9
             )
+            pca_activity = round(err / max(self.pca_thr["baseline_recon_mean"], 1e-9), 4)
 
         # ── TF Deep Autoencoder z-score ────────────────────────────────────
         tf_z: Optional[float] = None
@@ -227,6 +248,7 @@ class _Scorer:
                 tf_z = (err_tf - self.tf_thr["baseline_recon_mean"]) / max(
                     self.tf_thr["baseline_recon_std"], 1e-9
                 )
+                tf_activity = round(err_tf / max(self.tf_thr["baseline_recon_mean"], 1e-9), 4)
             except Exception as exc:
                 LOG.debug("TF scoring error: %s", exc)
 
@@ -257,6 +279,9 @@ class _Scorer:
             "iforest_score": if_score,
             "pca_z":         (max(0.0, pca_z) if pca_z is not None else None),
             "tf_z":          (max(0.0, tf_z) if tf_z is not None else None),
+            "if_activity":   if_activity,
+            "pca_activity":  pca_activity,
+            "tf_activity":   tf_activity,
             "anomaly":       anomaly,
             "top_features":  top,
             "model_version": FEATURE_VERSION,
@@ -296,6 +321,9 @@ def main() -> int:
     # Debounce state: consecutive anomaly count and last-alert timestamp per src_ip.
     _consecutive: dict = {}
     _last_alert_ts: dict = {}
+    # Fast live-display state: a rolling buffer of recent rows + a display timer.
+    _recent: deque = deque()
+    _last_display = time.monotonic()
 
     while not _should_exit:
         try:
@@ -311,10 +339,38 @@ def main() -> int:
                 d = json.loads(payload)
                 row = RawRow.from_dict(d)
                 store.add(row)
+                _recent.append(row)
             except (ValueError, KeyError) as exc:
                 LOG.warning("could not parse raw row: %s", exc)
 
         now = time.time()
+
+        # ── Fast live-display path (sliding window, display-only) ───────────
+        if scorer.ready and (time.monotonic() - _last_display) >= DISPLAY_PERIOD_S:
+            _last_display = time.monotonic()
+            cutoff = now - WINDOW_SECONDS
+            while _recent and _recent[0].ts < cutoff:
+                _recent.popleft()
+            try:
+                if _recent:
+                    b = WindowBucket(src_ip=_recent[-1].src_ip, window_start=cutoff)
+                    b.rows = list(_recent)
+                    s = scorer.score(b.feature_vector())
+                    import pathlib
+                    pathlib.Path(LIVE_ACTIVITY_FILE).write_text(json.dumps({
+                        "ts": now,
+                        "if_activity":  s.get("if_activity"),
+                        "pca_activity": s.get("pca_activity"),
+                        "tf_activity":  s.get("tf_activity"),
+                        "iforest_score": s.get("iforest_score"),
+                        "pca_z": s.get("pca_z"),
+                        "tf_z": s.get("tf_z"),
+                        "anomaly": bool(s.get("anomaly", False)),
+                        "n_msgs": len(_recent),
+                    }))
+            except Exception as exc:  # display path must never disrupt detection
+                LOG.debug("live-display score failed: %s", exc)
+
         if (time.monotonic() - last_flush) >= FLUSH_PERIOD_S:
             last_flush = time.monotonic()
             for bucket in store.flush_until(now):

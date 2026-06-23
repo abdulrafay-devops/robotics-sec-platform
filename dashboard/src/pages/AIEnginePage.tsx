@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
-  triggerInjection, useInjectionState, useScrollingAlerts,
+  triggerInjection, useInjectionState, useScrollingAlerts, useLiveScores,
   useTrend, useTrendHistory, useModelHealth,
 } from '../hooks/useMetrics'
 
@@ -300,12 +300,19 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
   const history    = useTrendHistory(3000)
   const modelHealth = useModelHealth(10000)
 
-  const iForest  = metrics?.iforest_score ?? -1
-  const pcaZ     = metrics?.pca_z ?? -1
-  // tf_z is now a dedicated Prometheus metric (lab_stage2_latest_tf_z)
-  // written by score_service._score_one() to /var/lab/state/latest_scores.json
-  // and exported by lab_exporter. No longer needs to scan the alert feed.
-  const tfZ      = metrics?.tf_z ?? -1
+  // Fast live scores straight from the data plane (~1s, no Prometheus lag). The
+  // gauges show the always-POSITIVE "activity" telemetry (real raw model output:
+  // IF anomaly score ~0.4 baseline, AE reconstruction error as "x normal" ~1.0),
+  // while the threat level + status words keep using the floored DETECTION scores
+  // (0 = no anomaly) so "calm baseline = NOMINAL" stays correct.
+  const live = useLiveScores(1000)
+  // Detection scores (authoritative for status/threat). Fall back to Prometheus.
+  const iForest  = live?.iforest_score ?? metrics?.iforest_score ?? -1
+  const pcaZ     = live?.pca_z ?? metrics?.pca_z ?? -1
+  // Positive activity values for the gauges (keep-last handled by the hook).
+  const ifAct  = live?.if_activity ?? null
+  const pcaAct = live?.pca_activity ?? null
+  const tfAct  = live?.tf_activity ?? null
   // Robot-behavior LSTM z-score. It is NEGATIVE during normal motion (the AE
   // reconstructs real motion better than its calibration baseline) and 0 when the
   // arm is idle; -1 is the exporter's "no recent telemetry" sentinel. Clamp real
@@ -315,15 +322,6 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
   const robotDisplay = robotNoData ? -1 : Math.max(0, robotZ)
   const robotZAlert = 4.0
 
-  // pca_z / tf_z are LEGITIMATELY negative on a normal window that reconstructs
-  // better than the calibration baseline (e.g. -1.5). -1.0 is the exporter's
-  // "no data" sentinel, so detect no-data with EXACT equality (as the robot plane
-  // does) — otherwise a real z below -1 was misread as WAITING. Clamp negatives to
-  // 0 for the gauge bar (you can't be "more secure than secure").
-  const pcaNoData  = pcaZ === -1
-  const pcaDisplay = pcaNoData ? -1 : Math.max(0, pcaZ)
-  const tfNoData   = tfZ === -1
-  const tfDisplay  = tfNoData ? -1 : Math.max(0, tfZ)
   const latency  = metrics?.detection_latency ?? -1
   const injActive = injState?.active ?? false
   const pipelineStage = injActive ? 2 : justFinished ? 5 : 0
@@ -417,44 +415,44 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
         {/* Row 1a — Model Gauges (3 network-plane + 1 robot-plane) */}
         <div className="grid grid-cols-4 gap-3">
 
-          {/* IForest Gauge */}
+          {/* IForest Gauge — live anomaly score (~0.4 baseline, 0.5 boundary) */}
           <div className="card flex flex-col items-center py-3 gap-1">
             <div className="card-header justify-center !mb-1">IsolationForest</div>
-            <ArcGauge value={iForest} max={0.70} dangerAt={0.55} warnAt={0.40}
-              label="IF Score" sublabel=">0.40 = anomaly" />
+            <ArcGauge value={ifAct ?? -1} max={1.0} dangerAt={0.95} warnAt={0.82}
+              label="Anomaly score" sublabel="0.5 = boundary" />
             <div className={clsx('text-[8.5px] font-mono text-center mt-0.5',
-              iForest >= 0.55 ? 'text-red-400 font-bold' : iForest >= 0.40 ? 'text-amber-400' : iForest >= 0 ? 'text-emerald-500' : 'text-slate-700')}>
-              {iForest >= 0.55 ? '▲ OUTLIER'
-               : iForest >= 0.40 ? '⚠ ELEVATED'
-               : iForest >= 0    ? '✓ NOMINAL'
-               :                  '— WAITING'}
+              ifAct == null ? 'text-slate-700' : ifAct >= 0.95 ? 'text-red-400 font-bold' : ifAct >= 0.82 ? 'text-amber-400' : 'text-emerald-500')}>
+              {ifAct == null ? '— WAITING'
+               : ifAct >= 0.95 ? '▲ OUTLIER'
+               : ifAct >= 0.82 ? '⚠ ELEVATED'
+               :                 '✓ NOMINAL'}
             </div>
           </div>
 
-          {/* PCA Gauge */}
+          {/* PCA Gauge — reconstruction error as x-normal (~1.0 baseline) */}
           <div className="card flex flex-col items-center py-3 gap-1">
             <div className="card-header justify-center !mb-1">PCA Recon</div>
-            <ArcGauge value={pcaDisplay} max={10} dangerAt={6.5} warnAt={4.0}
-              label="Z-Score (σ)" sublabel="alert ≥ 6.4 σ" />
+            <ArcGauge value={pcaAct ?? -1} max={50} dangerAt={20} warnAt={10}
+              label="Recon error" sublabel="× normal (spikes on attack)" />
             <div className={clsx('text-[8.5px] font-mono text-center mt-0.5',
-              pcaNoData ? 'text-slate-700' : pcaZ >= 3.5 ? 'text-red-400 font-bold' : pcaZ >= 2.0 ? 'text-amber-400' : 'text-emerald-500')}>
-              {pcaNoData ? '— WAITING'
-               : pcaZ >= 6.5 ? '▲ ERROR HIGH'
-               : pcaZ >= 4.0 ? '⚠ ELEVATED σ'
-               :               '✓ OK'}
+              pcaAct == null ? 'text-slate-700' : pcaAct >= 20 ? 'text-red-400 font-bold' : pcaAct >= 10 ? 'text-amber-400' : 'text-emerald-500')}>
+              {pcaAct == null ? '— WAITING'
+               : pcaAct >= 20 ? '▲ ERROR HIGH'
+               : pcaAct >= 10 ? '⚠ ELEVATED'
+               :                '✓ OK'}
             </div>
           </div>
 
-          {/* TF Autoencoder Gauge */}
+          {/* TF Autoencoder Gauge — reconstruction error as x-normal (~1.0 baseline) */}
           <div className="card flex flex-col items-center py-3 gap-1">
             <div className="card-header justify-center !mb-1">TF Deep AE</div>
-            <ArcGauge value={tfDisplay} max={10} dangerAt={6.0} warnAt={5.2}
-              label="TF AE Z-Score" sublabel="alert ≥ 5.9 σ" />
+            <ArcGauge value={tfAct ?? -1} max={60} dangerAt={45} warnAt={25}
+              label="Recon error" sublabel="× normal" />
             <div className={clsx('text-[8.5px] font-mono text-center mt-0.5',
-              tfNoData ? 'text-slate-700' : tfZ >= 3.0 ? 'text-red-400 font-bold' : tfZ >= 2.0 ? 'text-amber-400' : 'text-emerald-500')}>
-              {tfNoData ? '— WAITING'
-               : tfZ >= 6.0 ? '▲ COMPROMISED'
-               : tfZ >= 5.2 ? '⚠ ELEVATED'
+              tfAct == null ? 'text-slate-700' : tfAct >= 45 ? 'text-red-400 font-bold' : tfAct >= 25 ? 'text-amber-400' : 'text-emerald-500')}>
+              {tfAct == null ? '— WAITING'
+               : tfAct >= 45 ? '▲ COMPROMISED'
+               : tfAct >= 25 ? '⚠ ELEVATED'
                :               '✓ SECURE'}
             </div>
           </div>

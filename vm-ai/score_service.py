@@ -429,6 +429,30 @@ def api_trend() -> dict:
     return _trend_summary()
 
 
+@app.get("/api/scores/live")
+def api_scores_live() -> dict:
+    """Fast live AI scores for the dashboard gauges — reads the state files the data
+    plane writes (no Prometheus hop), so the panel updates within ~1s and shows the
+    always-positive 'activity' telemetry (if_activity / pca_activity / tf_activity)
+    that feature_consumer refreshes on a sliding window every ~2s. Falls back to the
+    5s tumbling latest_scores.json for the anomaly flag + floored detection scores."""
+    out = {
+        "ts": 0.0, "anomaly": False,
+        "iforest_score": 0.0, "pca_z": 0.0, "tf_z": 0.0,
+        "if_activity": None, "pca_activity": None, "tf_activity": None,
+    }
+    for path in ("/var/lab/state/latest_scores.json", "/var/lab/state/live_activity.json"):
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                d = json.load(fh)
+            for k, v in d.items():
+                if v is not None:
+                    out[k] = v
+        except (OSError, ValueError):
+            pass
+    return out
+
+
 @app.get("/api/trend/history")
 def api_trend_history() -> List[dict]:
     out: List[dict] = []

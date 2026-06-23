@@ -14,6 +14,36 @@ async function safeFetch<T>(url: string): Promise<T | null> {
   }
 }
 
+export interface LiveScores {
+  ts: number
+  anomaly: boolean
+  iforest_score: number
+  pca_z: number
+  tf_z: number
+  if_activity: number | null
+  pca_activity: number | null
+  tf_activity: number | null
+}
+
+// Fast live AI scores straight from the data-plane state files (no Prometheus hop).
+// Poll at ~1s; safeFetch returns null on a miss so the last good value is kept
+// (no flicker / drop-to-zero between updates).
+export function useLiveScores(intervalMs = 1000) {
+  const [live, setLive] = useState<LiveScores | null>(null)
+  useEffect(() => {
+    let active = true
+    const poll = async () => {
+      const d = await safeFetch<LiveScores>(`${API_BASE}/scores/live`)
+      if (!active) return
+      if (d) setLive(d)
+    }
+    poll()
+    const t = setInterval(poll, intervalMs)
+    return () => { active = false; clearInterval(t) }
+  }, [intervalMs])
+  return live
+}
+
 export function useTrend(intervalMs = 5000) {
   const [trendData, setTrendData] = useState<{
     window_60: {
