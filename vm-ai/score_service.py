@@ -1125,78 +1125,23 @@ def _run_injection(attack_type: str, duration_s: float, rate_hz: float) -> None:
         except Exception:
             pass
 
-        # Connect to Redis to push synthetic feature rows
-        REDIS_HOST = os.environ.get("LAB_REDIS_HOST", "127.0.0.1")
-        REDIS_PORT = int(os.environ.get("LAB_REDIS_PORT", "6379"))
-        # Must pass the password — omitting it made ping() fail whenever Redis
-        # had requirepass set, forcing the noisy direct-write fallback (which
-        # wrote ~11 alerts per injection and bypassed the real ML pipeline).
-        REDIS_PASSWORD = os.environ.get("LAB_REDIS_PASSWORD", "")
-        RAW_LIST = os.environ.get("LAB_REDIS_RAW_LIST", "lab.modbus.features.raw")
-        src_ip = _ATTACK_SRC_IPS.get(attack_type, "192.168.20.99")
-        feat_override = _ATTACK_FEATURE_OVERRIDES.get(attack_type, _ATTACK_FEATURE_OVERRIDES["modbus_command_injection"])
-
-        try:
-            import redis as _redis
-            r = _redis.Redis(host=REDIS_HOST, port=REDIS_PORT,
-                             password=REDIS_PASSWORD or None, decode_responses=True)
-            r.ping()
-            redis_ok = True
-        except Exception as redis_exc:
-            LOG.error("Injection: Redis not reachable (%s) — scoring directly into history only", redis_exc)
-            redis_ok = False
-
-        interval_s = 1.0 / max(rate_hz, 0.1)
+        # The REAL attack now runs on the SEC sensor, which polls the trigger file
+        # written above. That traffic flows through Zeek -> feature_consumer -> the
+        # IR attack_classifier and yields a correctly MITRE-tagged incident (the
+        # exact path validate_ir.py validates). We intentionally NO LONGER push
+        # synthetic feature rows here — those bypassed the classifier and produced
+        # mislabeled "192.168.20.99" alerts. This loop only drives the live
+        # sparkline / threat gauge for the duration (display-only, DEMO_MODE-gated).
+        feat_override = _ATTACK_FEATURE_OVERRIDES.get(
+            attack_type, _ATTACK_FEATURE_OVERRIDES["modbus_command_injection"])
         elapsed = 0.0
-        rows_pushed = 0
-        # Map each attack to a representative Modbus function code for the rows
-        # pushed to Redis (FC5 coil, FC3 read scan, FC16 bulk write, else FC6).
-        write_fc = {"coil_flood": 5, "register_scan": 3, "bulk_write": 16}.get(attack_type, 6)
-
+        tick = 2.0
         while elapsed < duration_s and not _should_injection_stop():
-            now_ts = time.time()
-            # Build a synthetic RawRow-compatible dict
-            addr = int(feat_override[5]) if feat_override[5] > 0 else 1024
-            # register_scan is reconnaissance: sweep the address space so the
-            # re-derived window shows the high n_unique_addresses that defines a scan
-            # (a single repeated address would not look like recon to the detector).
-            if attack_type == "register_scan":
-                addr = (rows_pushed * 13) % 1500
-            row = {
-                "ts": now_ts,
-                "src_ip": src_ip,
-                "dst_ip": "192.168.10.10",
-                "func_code": write_fc,
-                "is_request": True,
-                "address": addr,
-                "quantity": int(feat_override[7]) if feat_override[7] > 0 else 1,
-                "exception": rows_pushed % 10 == 0 and feat_override[4] > 0,
-                "ot_origin": feat_override[11] > 0.5,
-            }
-            if redis_ok:
-                try:
-                    r.rpush(RAW_LIST, json.dumps(row))
-                    rows_pushed += 1
-                except Exception as push_exc:
-                    LOG.warning("Injection: Redis push failed: %s", push_exc)
-
-            # Every 5 seconds worth of rows, push a scored window into _score_history
-            # and, if Redis is down, write directly to ai-alerts.json as fallback.
-            window_boundary = max(1, int(rate_hz * 5))
-            if rows_pushed % window_boundary == 1 or rows_pushed == 1:
-                _push_synthetic_score(feat_override, attack_type)
-            if not redis_ok and (int(elapsed) % 5 == 0 or elapsed < interval_s + 0.01):
-                # Direct fallback: write alert JSON so SecurityPage/playbook_engine see it
-                _write_synthetic_alert_direct(attack_type, src_ip, feat_override)
-
-            time.sleep(interval_s)
-            elapsed += interval_s
-
-        # Final score push to make the sparkline spike visible
+            _push_synthetic_score(feat_override, attack_type)
+            time.sleep(tick)
+            elapsed += tick
         _push_synthetic_score(feat_override, attack_type)
-        if not redis_ok:
-            _write_synthetic_alert_direct(attack_type, src_ip, feat_override)
-        LOG.warning("DEMO ATTACK INJECTION COMPLETE: type=%s rows_pushed=%d", attack_type, rows_pushed)
+        LOG.warning("DEMO ATTACK INJECTION COMPLETE (real attack ran on SEC): type=%s", attack_type)
 
     except Exception as exc:
         LOG.error("Injection loop error: %s", exc)

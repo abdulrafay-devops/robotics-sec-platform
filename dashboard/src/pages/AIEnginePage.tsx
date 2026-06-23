@@ -21,12 +21,16 @@ interface Props {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ATTACK_TYPES = [
-  // Network plane (Modbus) — scored by IsolationForest / PCA / TF autoencoders
-  { id: 'modbus_command_injection', label: 'Modbus CMD Injection', group: 'Network (Modbus)', desc: 'Writes anomalous coils/registers to bypass safety interlocks' },
-  { id: 'modbus_replay',            label: 'Modbus Replay Attack',  group: 'Network (Modbus)', desc: 'Replays captured Modbus write sequence — HAI Type-A3' },
-  { id: 'coil_flood',               label: 'Coil Flood (DoS)',      group: 'Network (Modbus)', desc: 'Rapid coil toggling to starve the PLC scan cycle' },
-  { id: 'register_scan',            label: 'Register Scan (Recon)', group: 'Network (Modbus)', desc: 'Sequential address sweep — reconnaissance of the register map' },
-  { id: 'bulk_write',               label: 'Bulk Write (Sabotage)', group: 'Network (Modbus)', desc: 'FC16 multi-register overwrite — process sabotage' },
+  // Network plane (Modbus) — scored by IsolationForest / PCA / TF autoencoders, then
+  // classified by the IR engine into a MITRE ATT&CK for ICS technique. Each id fires
+  // the REAL attack from the SEC sensor so the live incident carries the right tag.
+  { id: 'modbus_command_injection', label: 'Modbus CMD Injection (T0855)', group: 'Network (Modbus)', desc: 'Writes control coils + the cycle register from a non-HMI source — Unauthorized Command Message' },
+  { id: 'modbus_replay',            label: 'Modbus Replay (T0831)',        group: 'Network (Modbus)', desc: 'Replays a captured write sequence to scratch registers — Manipulation of Control' },
+  { id: 'coil_flood',               label: 'Coil Flood / DoS (T0814)',     group: 'Network (Modbus)', desc: 'Rapid coil writes starve the PLC scan cycle — Denial of Service' },
+  { id: 'register_scan',            label: 'Recon Scan (T0846)',           group: 'Network (Modbus)', desc: 'Broad read sweep of the register/coil map — Remote System Discovery' },
+  { id: 'safety_tamper',            label: 'E-Stop / Safety Tamper (T0880)', group: 'Network (Modbus)', desc: 'Writes the e-stop coil + safety register — Loss of Safety' },
+  { id: 'setpoint_drift',           label: 'Setpoint Drift (T0836)',       group: 'Network (Modbus)', desc: 'Slow, small writes to a setpoint register — Modify Parameter (low & slow)' },
+  { id: 'bulk_write',               label: 'Bulk Write (T0843)',           group: 'Network (Modbus)', desc: 'FC16 multi-register block overwrite — Program Download / sabotage' },
   // Robot plane (joint dynamics) — scored by the LSTM autoencoder + physical envelope
   { id: 'joint_speed_violation',    label: 'Joint Speed Violation', group: 'Robot (behavior)', desc: 'Drives a joint far past its safe speed — trips the physical envelope' },
   { id: 'trajectory_deviation',     label: 'Trajectory Deviation',  group: 'Robot (behavior)', desc: 'Pushes a joint outside its normal range — caught by the LSTM' },

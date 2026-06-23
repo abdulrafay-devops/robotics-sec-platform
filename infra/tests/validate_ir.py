@@ -43,14 +43,18 @@ TRAFFIC = "/opt/lab/vm-ot/traffic"
 INCIDENTS = "/var/lab/state/ir/incidents.jsonl"
 
 # (name, expected_attack_type, expected_mitre, launch_method, key, dur, rate)
+# All 7 launch via the trigger file (the EXACT path the dashboard inject buttons use):
+# score_service writes attack_trigger.json -> SEC's watcher runs the real attack ->
+# Zeek -> feature_consumer -> the IR classifier. `key` is the attack_type the SEC
+# watcher maps to a script; `expected` is what the classifier derives from the traffic.
 ATTACKS = [
     ("Command injection", "modbus_command_injection", "T0855", "trigger", "modbus_command_injection", 18, 10),
     ("Replay",            "modbus_replay",            "T0831", "trigger", "modbus_replay",            18, 5),
     ("Coil flood / DoS",  "coil_flood",               "T0814", "trigger", "coil_flood",               18, 40),
-    ("Recon scan",        "recon_scan",               "T0846", "extra",   "recon",                    18, 12),
-    ("E-stop tampering",  "safety_tamper",            "T0880", "extra",   "estop",                    18, 8),
-    ("Setpoint drift",    "setpoint_drift",           "T0836", "extra",   "drift",                    22, 2),
-    ("Bulk write",        "bulk_write",               "T0843", "extra",   "bulk",                     18, 8),
+    ("Recon scan",        "recon_scan",               "T0846", "trigger", "register_scan",            18, 12),
+    ("E-stop tampering",  "safety_tamper",            "T0880", "trigger", "safety_tamper",            18, 8),
+    ("Setpoint drift",    "setpoint_drift",           "T0836", "trigger", "setpoint_drift",           22, 2),
+    ("Bulk write",        "bulk_write",               "T0843", "trigger", "bulk_write",               18, 8),
 ]
 
 # Synthetic per-attack fingerprints for the OFFLINE gate — taken from REAL captured
@@ -132,17 +136,25 @@ def _reset_and_restart() -> None:
                "/var/lab/state/ir/drift_seen.json /var/lab/state/ir/ir_engine_offset.json "
                "/var/lab/log/ai-alerts.json")
     subprocess.run(["docker", "restart", AI], capture_output=True, text=True, timeout=120)
-    # Wait for the consumer to be scoring again (latest_scores.json refreshing).
-    for _ in range(24):
+    # Wait until the baseline pipeline is genuinely FLOWING again, not just until a
+    # (possibly stale) score file exists: require the score timestamp to be recent
+    # AND to advance across reads, so the very first attack lands on a warm pipeline.
+    fresh_seen = 0
+    last_ts = 0.0
+    for _ in range(30):
         time.sleep(5)
         r = _dexec(AI, "cat /var/lab/state/latest_scores.json 2>/dev/null")
-        if r and r.stdout.strip():
-            try:
-                if json.loads(r.stdout).get("ts"):
-                    print("  consumer back online.")
-                    return
-            except ValueError:
-                pass
+        try:
+            ts = float(json.loads(r.stdout).get("ts", 0))
+        except (ValueError, AttributeError, TypeError):
+            ts = 0.0
+        if ts and (time.time() - ts) < 12 and ts != last_ts:
+            fresh_seen += 1
+            last_ts = ts
+            if fresh_seen >= 3:  # 3 advancing fresh windows == pipeline flowing
+                print("  consumer back online + baseline flowing; warming up 15s...")
+                time.sleep(15)  # extra warm-up so the first attack isn't cold
+                return
     print("  (proceeding; consumer health probe inconclusive)")
 
 

@@ -121,6 +121,17 @@ MITRE tag, end-to-end). `validate_ai.py` re-run after the feature_consumer chang
 - VERIFIED: offline gate 7/7; live gate 7/7 (all techniques → correct playbook + MITRE); incidents
   flow end-to-end → API → dashboard with the technique + "why it fired".
 
+**Step 4 follow-up (2026-06-23) — dashboard inject panel reconciled with the validated library.**
+The AI Engine "Attack Injection" dropdown predated Steps 2-4: it listed only 5 Modbus attacks and its
+inject path pushed SYNTHETIC feature rows (src 192.168.20.99) that BYPASSED the classifier → dashboard
+buttons produced unclassified/blocked incidents. Fixed so every button fires the REAL attack:
+`vm-sec/entrypoint_sec.sh` watcher now maps all 7 attack_type strings to real scripts (register_scan→
+recon, safety_tamper→estop, setpoint_drift→drift, bulk_write→bulk via attack_modbus_extra.py);
+`score_service._run_injection` only writes the trigger (SEC runs the real attack) + drives the display
+sparkline (no more synthetic rows); dashboard dropdown is now the 7 Modbus (MITRE-tagged) + 5 robot = 12.
+`validate_ir.py` now launches all 7 via the trigger path (exactly what the dashboard does) → live 7/7.
+(Harness warm-up tweak: wait for the baseline to flow after the AI restart so the first attack isn't cold.)
+
 **ALL 4 STEPS COMPLETE.** The AI detect → classify → respond story is demo-grade end-to-end:
 richer baseline + 7-attack MITRE library + retrained models (non-negative, behind the harness) +
 SOC-grade per-attack classification, playbooks, and incident case view — all gated by two harnesses

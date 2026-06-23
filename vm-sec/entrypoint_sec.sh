@@ -166,12 +166,26 @@ watch_attack_triggers() {
             rm -f /var/lab/state/attack_trigger.json
             
             echo "Launching attack locally on container-sec: type=$ATTACK_TYPE duration=$DURATION rate=$RATE"
+            # All 7 Modbus techniques run as REAL attacks from the SEC sensor so
+            # they flow through Zeek -> feature_consumer -> the IR classifier and
+            # produce a correctly MITRE-tagged incident (same path the harness
+            # validates). The 3 originals use their dedicated scripts; the 4 added
+            # in the Step 2 library run via attack_modbus_extra.py's modes.
+            EXTRA=/opt/lab/vm-ot/traffic/attack_modbus_extra.py
             if [ "$ATTACK_TYPE" = "modbus_command_injection" ]; then
                 /opt/lab/venv-shipper/bin/python /opt/lab/vm-ot/traffic/attack_modbus_inject.py --host 192.168.10.10 --duration-s "$DURATION" --rate-hz "$RATE" > /var/lab/log/lab-attack-injection.log 2>&1 &
             elif [ "$ATTACK_TYPE" = "modbus_replay" ]; then
                 /opt/lab/venv-shipper/bin/python /opt/lab/vm-ot/traffic/attack_modbus_replay.py --host 192.168.10.10 --duration-s "$DURATION" --multiplier 5 > /var/lab/log/lab-attack-replay.log 2>&1 &
             elif [ "$ATTACK_TYPE" = "coil_flood" ]; then
                 /opt/lab/venv-shipper/bin/python /opt/lab/vm-ot/traffic/attack_modbus_flood.py --host 192.168.10.10 --duration-s "$DURATION" --rate-hz "$RATE" > /var/lab/log/lab-attack-flood.log 2>&1 &
+            elif [ "$ATTACK_TYPE" = "register_scan" ]; then
+                /opt/lab/venv-shipper/bin/python "$EXTRA" --host 192.168.10.10 --mode recon --duration-s "$DURATION" --rate-hz "$RATE" > /var/lab/log/lab-attack-recon.log 2>&1 &
+            elif [ "$ATTACK_TYPE" = "safety_tamper" ]; then
+                /opt/lab/venv-shipper/bin/python "$EXTRA" --host 192.168.10.10 --mode estop --duration-s "$DURATION" --rate-hz "$RATE" > /var/lab/log/lab-attack-estop.log 2>&1 &
+            elif [ "$ATTACK_TYPE" = "setpoint_drift" ]; then
+                /opt/lab/venv-shipper/bin/python "$EXTRA" --host 192.168.10.10 --mode drift --duration-s "$DURATION" --rate-hz "$RATE" > /var/lab/log/lab-attack-drift.log 2>&1 &
+            elif [ "$ATTACK_TYPE" = "bulk_write" ]; then
+                /opt/lab/venv-shipper/bin/python "$EXTRA" --host 192.168.10.10 --mode bulk --duration-s "$DURATION" --rate-hz "$RATE" > /var/lab/log/lab-attack-bulk.log 2>&1 &
             else
                 echo "Unknown attack type: $ATTACK_TYPE"
             fi
