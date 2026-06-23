@@ -286,6 +286,18 @@ function AlertRow({ alert }: { alert: Record<string, any> }) {
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
+function AiTile({ label, value, tone, sub, pulse }: { label: string; value: string; tone: 'ok' | 'warn' | 'bad' | 'neutral'; sub?: string; pulse?: boolean }) {
+  const t = tone === 'ok' ? 'text-emerald-400' : tone === 'warn' ? 'text-amber-400' : tone === 'bad' ? 'text-red-400' : 'text-slate-100'
+  const ring = tone === 'bad' ? 'border-red-900/60' : tone === 'warn' ? 'border-amber-900/50' : 'border-slate-800'
+  return (
+    <div className={clsx('rounded-lg border bg-slate-900/40 px-4 py-3', ring)}>
+      <div className="text-[10px] uppercase tracking-wider text-slate-500">{label}</div>
+      <div className={clsx('text-2xl font-semibold mt-1 tabular-nums', t, pulse && 'animate-pulse')}>{value}</div>
+      {sub && <div className="text-[10px] text-slate-600 mt-0.5">{sub}</div>}
+    </div>
+  )
+}
+
 export function AIEnginePage({ hmiState, metrics }: Props) {
   const [attackType, setAttackType] = useState(ATTACK_TYPES[0].id)
   const [duration,   setDuration]   = useState(8)
@@ -414,6 +426,22 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
       {/* ── Body ────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-[1500px] mx-auto p-6 space-y-4">
+
+        {/* Summary KPIs */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <AiTile label="Threat level" value={threatLevel}
+            tone={threatLevel === 'NOMINAL' ? 'ok' : threatLevel === 'WATCH' ? 'warn' : 'bad'}
+            pulse={threatLevel === 'CRITICAL'} sub="Network + robot planes" />
+          <AiTile label="Detection models" value={`${modelRows.filter(r => modelsLoaded[r.key] === true).length}/${modelRows.length} online`}
+            tone={modelRows.every(r => modelsLoaded[r.key] === true) ? 'ok' : 'warn'} sub="Loaded & scoring live" />
+          <AiTile label="Detection latency" value={latency > 0 ? `${latency.toFixed(2)}s` : '—'}
+            tone={latency > 5 ? 'warn' : latency > 0 ? 'ok' : 'neutral'} sub="Injection → first alert" />
+          <AiTile label="Anomaly rate (60s)" value={`${anomRate.toFixed(1)}%`}
+            tone={anomRate > 15 ? 'bad' : anomRate > 5 ? 'warn' : 'ok'} sub="Detection windows flagged" />
+        </div>
+
+        {/* Detection models */}
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 pt-1">Detection Models</div>
 
         {/* Row 1a — Model Gauges (3 network-plane + 1 robot-plane) */}
         <div className="grid grid-cols-4 gap-3">
