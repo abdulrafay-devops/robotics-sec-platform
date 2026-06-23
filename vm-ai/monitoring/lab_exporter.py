@@ -55,17 +55,20 @@ PROD_PORT = int(os.environ.get('LAB_PROD_PORT', '502'))
 SAFETY_HOST = os.environ.get('LAB_SAFETY_HOST', PROD_HOST)
 SAFETY_PORT = int(os.environ.get('LAB_SAFETY_PORT', '503'))
 
+# Health probes from the AI / management plane (where this exporter runs). Only
+# targets this zone can LEGITIMATELY reach are probed — the OT cell is verified via
+# its read-only proxy (5020) and control gateway (8002), never raw PLC:502 (that is
+# deliberately firewalled). IT (gitea) and DMZ (guacamole) are unreachable from here
+# by IEC-62443 segmentation BY DESIGN, so probing them would falsely report DOWN;
+# their health is surfaced on their own pages instead.
 COMPONENT_PROBES = {
-    'stage1_ntopng': ('192.168.40.20', 3001),
-    'stage2_score_service': ('127.0.0.1', 8000),
-    'stage2_redis_bus': ('127.0.0.1', 6379),
-    'stage3_openplc_production': (PROD_HOST, PROD_PORT),
-    'stage3_openplc_safety': (PROD_HOST, 503),
-    'stage6_prometheus': ('127.0.0.1', 9090),
-    'stage6_grafana': ('127.0.0.1', 3000),
-    'stage6_lab_exporter': ('127.0.0.1', 9101),
-    'dmz_guacamole': ('192.168.30.20', 8080),
-    'it_gitea': ('192.168.20.20', 3000),
+    'ot_production_plc': ('192.168.10.10', 5020),   # OT read-only proxy
+    'ot_control_gateway': ('192.168.10.10', 8002),  # OT control/safety gateway
+    'ai_score_service': ('127.0.0.1', 8000),
+    'ai_redis_bus': ('127.0.0.1', 6379),
+    'prometheus': ('127.0.0.1', 9090),
+    'grafana': ('127.0.0.1', 3000),
+    'lab_exporter': ('127.0.0.1', 9101),
 }
 
 
@@ -228,28 +231,31 @@ def _suricata_event_counts() -> tuple[dict[str, int], dict[str, int]]:
 
 
 def _read_safety_registers(start: int, count: int) -> list[int] | None:
-    """Read safety PLC holding registers without adding a pymodbus dependency."""
-    req = (
-        (1).to_bytes(2, 'big') +
-        b'\x00\x00' +
-        (6).to_bytes(2, 'big') +
-        b'\x01\x03' +
-        start.to_bytes(2, 'big') +
-        count.to_bytes(2, 'big')
-    )
+    """Return [safety_state, ack_counter, last_fault_code] (MW10-12) via
+    score_service's /api/hmi/state.
+
+    The AI/management plane cannot — and by IEC-62443 segmentation MUST NOT — reach
+    the raw PLC:502 directly, so the old direct-Modbus read to 192.168.40.10:503
+    always failed (-1). score_service (same container) already reads the production
+    PLC through the OT read-only proxy, so we reuse that single source of truth."""
+    if start != 10:
+        return None
     try:
-        with socket.create_connection((SAFETY_HOST, SAFETY_PORT), timeout=0.4) as s:
-            s.sendall(req)
-            data = s.recv(64)
-    except OSError:
+        import urllib.request
+        req = urllib.request.Request(
+            "http://127.0.0.1:8000/api/hmi/state",
+            headers={"X-API-Key": os.environ.get("LAB_API_KEY", "")},
+        )
+        with urllib.request.urlopen(req, timeout=0.8) as resp:
+            d = json.loads(resp.read().decode("utf-8"))
+        plc = d.get("plc_state") or {}
+        if not isinstance(plc, dict) or "error" in plc or "safety_state" not in plc:
+            return None
+        return [int(plc.get("safety_state", -1)),
+                int(plc.get("ack_counter", 0)),
+                int(plc.get("last_fault_code", 0))]
+    except Exception:
         return None
-    expected_len = 9 + (count * 2)
-    if len(data) < expected_len or data[7] != 3:
-        return None
-    return [
-        int.from_bytes(data[9 + (i * 2):11 + (i * 2)], byteorder='big')
-        for i in range(count)
-    ]
 
 
 def _stage3_safety_state() -> int:

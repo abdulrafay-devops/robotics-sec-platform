@@ -1,6 +1,7 @@
 import type { HMIState, PrometheusMetrics, PageId } from '../types'
 import { Activity, Server, Shield, Wifi, WifiOff, ArrowRight } from 'lucide-react'
 import { clsx } from 'clsx'
+import { useLiveScores, useIncidents } from '../hooks/useMetrics'
 
 interface Props {
   hmiState: HMIState | null
@@ -152,10 +153,25 @@ function TopologyMap({ metrics }: { metrics: PrometheusMetrics | null }) {
 }
 
 export function OverviewPage({ hmiState, metrics, connected, onNavigate }: Props) {
-  const plc = hmiState?.plc_state
+  // Live data straight from the data plane (the Prometheus chain lags ~15s and was
+  // showing N/A on a healthy plant). safety/SIS come from the live PLC read,
+  // AI status from /api/scores/live, incidents from the live IR log.
+  const live = useLiveScores(1500)
+  const incidents = useIncidents(3000)
+  const plc = hmiState?.plc_state as any
   const plcOk = plc && !('error' in plc)
   const safetyLabel = ['NORMAL', 'DEGRADED', 'EMERGENCY']
-  const safetyState = metrics?.safety_state ?? -1
+  const safetyState = plcOk && typeof plc.safety_state === 'number' ? plc.safety_state : (metrics?.safety_state ?? -1)
+  // SIS integrity: safety registers internally valid (state 0-2, known fault code).
+  const sisOk = plcOk && [0, 1, 2].includes(plc.safety_state) && [0, 1, 2, 3, 4].includes(plc.last_fault_code)
+  const sisKnown = plcOk
+  // AI engine: live anomaly state + the positive activity reading.
+  const aiAnomaly = live?.anomaly ?? false
+  const aiActivity = live?.if_activity ?? null
+  // Open incidents from the live IR log (Prometheus count lagged/showed 0).
+  const openIncidents = incidents.length > 0
+    ? incidents.filter(i => !i.closed && !(i as any).postmortem_committed && !(i as any).blocked && !(i as any).merged).length
+    : Math.max(0, Math.round(metrics?.open_incidents ?? 0))
 
   return (
     <div className="h-full overflow-y-auto p-5 space-y-5">
@@ -204,8 +220,8 @@ export function OverviewPage({ hmiState, metrics, connected, onNavigate }: Props
           </div>
           <div className="text-[10px] text-slate-500 font-mono flex items-center justify-between border-t border-slate-800/60 pt-2 mt-2">
             <span>SIS Integrity:</span>
-            <span className={clsx('font-bold', metrics?.sis_integrity === 1 ? 'text-safe-green' : 'text-slate-500')}>
-              {metrics?.sis_integrity === 1 ? '✓ OK' : metrics?.sis_integrity === 0 ? '✗ FAIL' : '—'}
+            <span className={clsx('font-bold', !sisKnown ? 'text-slate-500' : sisOk ? 'text-safe-green' : 'text-ot-red')}>
+              {!sisKnown ? '—' : sisOk ? '✓ OK' : '✗ FAIL'}
             </span>
           </div>
         </div>
@@ -218,15 +234,15 @@ export function OverviewPage({ hmiState, metrics, connected, onNavigate }: Props
           <div>
             <div className="card-header"><Activity size={13} className="group-hover:text-blue-400 transition-colors" />AI Anomaly Engine</div>
             <div className={clsx('stat-value mt-2 text-[26px]',
-              (metrics?.iforest_score ?? -1) > 0.15 ? 'text-ot-red text-shadow-glow' : 'text-safe-green text-shadow-glow'
+              aiAnomaly ? 'text-ot-red text-shadow-glow animate-pulse' : aiActivity != null ? 'text-safe-green text-shadow-glow' : 'text-slate-500'
             )}>
-              {metrics?.iforest_score != null && metrics.iforest_score > -1 ? metrics.iforest_score.toFixed(4) : '—'}
+              {aiActivity == null ? '—' : aiAnomaly ? 'ANOMALY' : 'NOMINAL'}
             </div>
           </div>
           <div className="text-[10px] text-slate-500 font-mono flex items-center justify-between border-t border-slate-800/60 pt-2 mt-2">
-            <span>Latency:</span>
+            <span>Model activity:</span>
             <span className="text-cyan-400">
-              {(metrics?.detection_latency ?? -1) > 0 ? `${metrics!.detection_latency.toFixed(2)}s` : 'N/A'}
+              {aiActivity != null ? aiActivity.toFixed(2) : 'N/A'}
             </span>
           </div>
         </div>
@@ -238,10 +254,10 @@ export function OverviewPage({ hmiState, metrics, connected, onNavigate }: Props
         >
           <div>
             <div className="card-header"><Server size={13} className="group-hover:text-red-500 transition-colors" />Open Incidents</div>
-            <div className={clsx('stat-value mt-2 text-[28px] tabular-nums', 
-              (metrics?.open_incidents ?? 0) > 0 ? 'text-ot-red text-shadow-glow animate-pulse' : 'text-safe-green text-shadow-glow'
+            <div className={clsx('stat-value mt-2 text-[28px] tabular-nums',
+              openIncidents > 0 ? 'text-ot-red text-shadow-glow animate-pulse' : 'text-safe-green text-shadow-glow'
             )}>
-              {metrics?.open_incidents ?? '0'}
+              {openIncidents}
             </div>
           </div>
           <div className="text-[10px] text-slate-500 font-mono flex items-center justify-between border-t border-slate-800/60 pt-2 mt-2">
