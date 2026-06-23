@@ -149,104 +149,76 @@ const COLOR_MAP: Record<string, Record<string, string>> = {
 // Neutral classes used for the active control's panel + pipeline button (no rainbow).
 const NEUTRAL_BORDER = 'border-slate-700'
 const NEUTRAL_BG = 'bg-slate-800/30'
-const NEUTRAL_RING = 'ring-slate-600/40'
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function PipelineFlow({ metrics, activeId, onSelect }: {
+// KPI tile (cloud-console style summary metric).
+function Kpi({ label, value, tone, sub }: { label: string; value: string; tone: 'ok' | 'warn' | 'bad' | 'neutral'; sub?: string }) {
+  const toneCls = tone === 'ok' ? 'text-emerald-400' : tone === 'warn' ? 'text-amber-400' : tone === 'bad' ? 'text-red-400' : 'text-slate-200'
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3">
+      <div className="text-[10px] uppercase tracking-wider text-slate-500">{label}</div>
+      <div className={clsx('text-2xl font-semibold mt-1 tabular-nums', toneCls)}>{value}</div>
+      {sub && <div className="text-[10px] text-slate-600 mt-0.5">{sub}</div>}
+    </div>
+  )
+}
+
+// Professional controls table — one row per security control domain, like a cloud
+// security-posture console (status, governing standard, live indicator, drill-in).
+function ControlsTable({ metrics, activeId, onSelect }: {
   metrics: PrometheusMetrics | null
   activeId: number | null
   onSelect: (id: number) => void
 }) {
   return (
-    <div className="flex items-center justify-between gap-0 w-full">
-      {STAGES.map((s, i) => {
-        const c = COLOR_MAP[s.color]
-        const m = metrics ? s.metric(metrics) : null
-        const isOk = m?.ok ?? true
-        const isActive = activeId === s.id
-        const Icon = s.icon
-        return (
-          <div key={s.id} className="flex items-center flex-1">
-            <button
-              onClick={() => onSelect(s.id)}
-              className={clsx(
-                'flex-1 flex flex-col items-center gap-1.5 py-3 px-2 rounded-lg border transition-all duration-200 group',
-                'hover:scale-105 active:scale-95 focus:outline-none',
-                isActive
-                  ? `${NEUTRAL_BORDER} ${NEUTRAL_BG} ring-1 ${NEUTRAL_RING}`
-                  : 'border-slate-800/60 bg-slate-900/30 hover:border-slate-700',
-              )}
-            >
-              <div className={clsx(
-                'w-9 h-9 rounded-lg flex items-center justify-center border transition-all',
-                isActive ? `${NEUTRAL_BG} ${NEUTRAL_BORDER}` : 'bg-slate-900 border-slate-800 group-hover:border-slate-700',
-              )}>
-                <Icon size={16} className={isActive ? c.text : 'text-slate-600 group-hover:text-slate-400'} />
-              </div>
-              <div className={clsx('text-[8.5px] font-mono font-bold uppercase tracking-wider', isActive ? c.text : 'text-slate-600')}>
-                {s.code}
-              </div>
-              {m && (
-                <div className={clsx(
-                  'text-[9px] font-mono px-1.5 py-0.5 rounded border',
-                  isOk ? 'bg-emerald-950/50 border-emerald-800 text-emerald-400'
-                    : 'bg-red-950/50 border-red-800 text-red-400',
-                )}>
-                  {m.value}
-                </div>
-              )}
-            </button>
-            {i < STAGES.length - 1 && (
-              <ChevronRight size={14} className="text-slate-800 flex-shrink-0 mx-0.5" />
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function ComplianceBand({ metrics }: { metrics: PrometheusMetrics | null }) {
-  const score = metrics?.compliance_score ?? -1
-  const color = score >= 85 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444'
-  const label = score >= 85 ? 'COMPLIANT' : score >= 60 ? 'PARTIAL' : score >= 0 ? 'NON-COMPLIANT' : 'N/A'
-  const r = 40, circ = 2 * Math.PI * r
-  const fill = score >= 0 ? circ * (score / 100) : 0
-  return (
-    <div className="flex items-center gap-4">
-      <svg width="96" height="96" viewBox="0 0 96 96">
-        <circle cx="48" cy="48" r={r} fill="none" stroke="#0f172a" strokeWidth="8" />
-        <circle cx="48" cy="48" r={r} fill="none" stroke={color} strokeWidth="8"
-          strokeDasharray={`${fill} ${circ}`} strokeDashoffset={circ / 4}
-          strokeLinecap="round" transform="rotate(-90 48 48)"
-          style={{ transition: 'stroke-dasharray 1.2s ease' }} />
-        <text x="48" y="44" textAnchor="middle" fill={color} fontSize="18" fontWeight="bold" fontFamily="monospace">
-          {score >= 0 ? Math.round(score) : '--'}
-        </text>
-        <text x="48" y="58" textAnchor="middle" fill="#475569" fontSize="6.5" fontFamily="monospace" fontWeight="bold">
-          IEC 62443
-        </text>
-      </svg>
-      <div>
-        <div className={clsx('text-xs font-mono font-bold', score >= 85 ? 'text-emerald-400' : score >= 60 ? 'text-amber-400' : score >= 0 ? 'text-red-400' : 'text-slate-600')}>
-          {label}
-        </div>
-        <div className="text-[10px] text-slate-500 mt-0.5 font-mono">Compliance Score</div>
-        <div className="mt-2 space-y-1">
-          {[
-            { label: 'Safety State', ok: (metrics?.safety_state ?? -1) === 0, val: ['NORMAL', 'DEGRADED', 'EMERGENCY'][(metrics?.safety_state ?? -1)] ?? 'N/A' },
-            { label: 'SIS Integrity', ok: metrics?.sis_integrity === 1, val: metrics?.sis_integrity === 1 ? 'OK' : metrics?.sis_integrity === 0 ? 'FAIL' : 'N/A' },
-            { label: 'Pipeline', ok: metrics?.pipeline_verdict === 'PASS', val: metrics?.pipeline_verdict ?? 'NONE' },
-          ].map(({ label, ok, val }) => (
-            <div key={label} className="flex items-center gap-2 text-[9.5px] font-mono">
-              {ok ? <CheckCircle2 size={10} className="text-emerald-400 flex-shrink-0" /> : <XCircle size={10} className="text-red-500 flex-shrink-0" />}
-              <span className="text-slate-500">{label}:</span>
-              <span className={ok ? 'text-emerald-400' : 'text-red-400'}>{val}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+    <div className="rounded-lg border border-slate-800 overflow-hidden">
+      <table className="w-full text-xs">
+        <thead className="bg-slate-900/70 text-slate-500 text-[10px] uppercase tracking-wider">
+          <tr>
+            <th className="text-left font-medium px-4 py-2.5">Control Domain</th>
+            <th className="text-left font-medium px-4 py-2.5 hidden lg:table-cell">Governing Standard</th>
+            <th className="text-left font-medium px-4 py-2.5">Status</th>
+            <th className="text-left font-medium px-4 py-2.5">Live Indicator</th>
+            <th className="px-2 py-2.5 w-8" />
+          </tr>
+        </thead>
+        <tbody>
+          {STAGES.map(s => {
+            const m = metrics ? s.metric(metrics) : null
+            const isActive = activeId === s.id
+            const Icon = s.icon
+            const ok = m?.ok ?? null
+            return (
+              <tr key={s.id} onClick={() => onSelect(s.id)}
+                className={clsx('border-t border-slate-800/60 cursor-pointer transition-colors',
+                  isActive ? 'bg-slate-800/50' : 'hover:bg-slate-800/25')}>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <Icon size={15} className="text-slate-400 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-slate-200 font-medium truncate">{s.title}</div>
+                      <div className="text-[10px] text-slate-500 truncate">{s.subtitle}</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-[10px] font-mono text-slate-500 hidden lg:table-cell">{s.compliance}</td>
+                <td className="px-4 py-3">
+                  <span className={clsx('inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full border',
+                    ok === true ? 'border-emerald-800 bg-emerald-950/40 text-emerald-300'
+                      : ok === false ? 'border-red-800 bg-red-950/40 text-red-300'
+                        : 'border-slate-700 bg-slate-800/40 text-slate-400')}>
+                    <span className={clsx('w-1.5 h-1.5 rounded-full', ok === true ? 'bg-emerald-400' : ok === false ? 'bg-red-500' : 'bg-slate-500')} />
+                    {ok === true ? 'Healthy' : ok === false ? 'Attention' : 'Unknown'}
+                  </span>
+                </td>
+                <td className="px-4 py-3 font-mono text-[11px] text-slate-300">{m ? `${m.label}: ${m.value}` : '—'}</td>
+                <td className="px-2 py-3 text-slate-600"><ChevronRight size={14} /></td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -823,30 +795,46 @@ export function StagesPage({ metrics }: Props) {
 
   const activeStage = STAGES.find(s => s.id === activeStageId)!
 
-  return (
-    <div className="h-full overflow-y-auto" style={{ background: '#060a10' }}>
-      <div className="p-5 space-y-4">
+  // Posture roll-up.
+  const score = metrics?.compliance_score ?? -1
+  const healthy = metrics ? STAGES.filter(s => s.metric(metrics).ok).length : 0
+  const safety = metrics?.safety_state ?? -1
+  const openInc = Math.round(metrics?.open_incidents ?? 0)
 
-        {/* Header row */}
-        <div className="flex items-start gap-5">
-          <ComplianceBand metrics={metrics} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2">
-              <Shield size={14} className="text-slate-400" />
-              <h1 className="text-base font-bold text-white tracking-tight">
-                Security Control Posture — IEC 62443 / NIST SP 800-82
-              </h1>
-            </div>
-            <p className="text-[10.5px] text-slate-500 mb-3 leading-relaxed">
-              Live status of the six OT security control domains — network segmentation, AI detection, safety
-              integrity, vulnerability management, secure CI/CD, and incident response. Select a domain for its
-              live evidence, mapped to the governing standard.
+  return (
+    <div className="h-full overflow-y-auto" style={{ background: '#070b11' }}>
+      <div className="p-6 space-y-5 max-w-[1500px] mx-auto">
+
+        {/* Header */}
+        <div className="flex items-center gap-2.5">
+          <Shield size={18} className="text-slate-300" />
+          <div>
+            <h1 className="text-lg font-semibold text-white tracking-tight">Security Control Posture</h1>
+            <p className="text-[11px] text-slate-500">
+              Live status of the OT security control domains, mapped to IEC 62443 / NIST SP 800-82. Select a domain for its evidence.
             </p>
-            <PipelineFlow metrics={metrics} activeId={activeStageId} onSelect={setActiveStageId} />
           </div>
         </div>
 
-        {/* Active stage detail */}
+        {/* Posture KPI roll-up */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Kpi label="Compliance" value={score >= 0 ? `${Math.round(score)}%` : '—'}
+            tone={score >= 85 ? 'ok' : score >= 60 ? 'warn' : score >= 0 ? 'bad' : 'neutral'}
+            sub={score >= 85 ? 'Compliant' : score >= 60 ? 'Partial' : score >= 0 ? 'Non-compliant' : 'No data'} />
+          <Kpi label="Controls Healthy" value={metrics ? `${healthy} / ${STAGES.length}` : '—'}
+            tone={healthy === STAGES.length ? 'ok' : healthy >= STAGES.length - 1 ? 'warn' : 'bad'}
+            sub="Domains passing live checks" />
+          <Kpi label="Safety State" value={safety >= 0 ? (['NORMAL', 'DEGRADED', 'EMERGENCY'][safety] ?? '—') : '—'}
+            tone={safety === 0 ? 'ok' : safety === 1 ? 'warn' : safety === 2 ? 'bad' : 'neutral'}
+            sub="Safety supervisor (IEC 61511)" />
+          <Kpi label="Open Incidents" value={String(openInc)}
+            tone={openInc === 0 ? 'ok' : 'bad'} sub="Active IR cases" />
+        </div>
+
+        {/* Controls table */}
+        <ControlsTable metrics={metrics} activeId={activeStageId} onSelect={setActiveStageId} />
+
+        {/* Selected control evidence */}
         <StageDetailPanel
           stage={activeStage}
           metrics={metrics}
