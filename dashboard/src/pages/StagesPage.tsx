@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import type { PrometheusMetrics } from '../types'
 import {
   Network, Brain, Shield, Search, GitBranch, AlertOctagon,
-  CheckCircle2, XCircle, Clock, ChevronRight, Activity,
-  Lock, Server, Cpu, Terminal, ExternalLink, Check,
-  ArrowRight, Zap, Eye, ShieldAlert, RefreshCw, Hash,
+  CheckCircle2, XCircle, ChevronRight, Activity,
+  Lock, Server, Cpu, ExternalLink,
+  ShieldAlert, RefreshCw, Hash,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
@@ -140,25 +140,16 @@ const STAGES = [
   },
 ]
 
+// Uniform, professional muted palette — colour now signals STATUS (ok/warn/fail),
+// not decoration. Every control area uses the same restrained slate/steel scheme.
+const _PRO = { badge: 'bg-slate-800/60 border-slate-700 text-slate-300', dot: 'bg-slate-400', text: 'text-slate-300', num: 'text-slate-200' }
 const COLOR_MAP: Record<string, Record<string, string>> = {
-  cyan: { badge: 'bg-cyan-950 border-cyan-700 text-cyan-300', dot: 'bg-cyan-400', text: 'text-cyan-400', num: 'text-cyan-300' },
-  blue: { badge: 'bg-blue-950 border-blue-700 text-blue-300', dot: 'bg-blue-400', text: 'text-blue-400', num: 'text-blue-300' },
-  violet: { badge: 'bg-violet-950 border-violet-700 text-violet-300', dot: 'bg-violet-400', text: 'text-violet-400', num: 'text-violet-300' },
-  amber: { badge: 'bg-amber-950 border-amber-700 text-amber-300', dot: 'bg-amber-400', text: 'text-amber-400', num: 'text-amber-300' },
-  emerald: { badge: 'bg-emerald-950 border-emerald-700 text-emerald-300', dot: 'bg-emerald-400', text: 'text-emerald-400', num: 'text-emerald-300' },
-  rose: { badge: 'bg-rose-950 border-rose-700 text-rose-300', dot: 'bg-rose-400', text: 'text-rose-400', num: 'text-rose-300' },
+  cyan: _PRO, blue: _PRO, violet: _PRO, amber: _PRO, emerald: _PRO, rose: _PRO,
 }
-
-// ─── Kill chain steps ─────────────────────────────────────────────────────────
-const KILL_CHAIN = [
-  { phase: 'ATTACKER', color: 'text-rose-400', bg: 'bg-rose-950/40 border-rose-800', action: 'Modbus command injection → 192.168.10.10:502' },
-  { phase: 'S1 DETECT', color: 'text-cyan-400', bg: 'bg-cyan-950/40 border-cyan-800', action: 'Zeek flags anomalous function codes → feature row pushed to Redis' },
-  { phase: 'S2 SCORE', color: 'text-blue-400', bg: 'bg-blue-950/40 border-blue-800', action: 'IsolationForest > 0.15 + PCA z > 3.0 → ANOMALY alert → ai-alerts.json' },
-  { phase: 'S3 SAFETY', color: 'text-violet-400', bg: 'bg-violet-950/40 border-violet-800', action: 'Safety supervisor detects unsafe coil state → EMERGENCY latched → E-STOP' },
-  { phase: 'S4 AUDIT', color: 'text-amber-400', bg: 'bg-amber-950/40 border-amber-800', action: 'Integrity baseline drift detected → CVE correlation updated' },
-  { phase: 'S5 CI GATE', color: 'text-emerald-400', bg: 'bg-emerald-950/40 border-emerald-800', action: 'Pipeline re-runs PLC lint + vuln gate → signed artifact written' },
-  { phase: 'S6 IR', color: 'text-rose-300', bg: 'bg-rose-950/40 border-rose-800', action: 'Playbook fires: evidence capture → isolate → slow → stop → post-mortem' },
-]
+// Neutral classes used for the active control's panel + pipeline button (no rainbow).
+const NEUTRAL_BORDER = 'border-slate-700'
+const NEUTRAL_BG = 'bg-slate-800/30'
+const NEUTRAL_RING = 'ring-slate-600/40'
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -183,13 +174,13 @@ function PipelineFlow({ metrics, activeId, onSelect }: {
                 'flex-1 flex flex-col items-center gap-1.5 py-3 px-2 rounded-lg border transition-all duration-200 group',
                 'hover:scale-105 active:scale-95 focus:outline-none',
                 isActive
-                  ? `${s.border} ${s.bg} ${s.glow} ring-1 ${s.ring}`
+                  ? `${NEUTRAL_BORDER} ${NEUTRAL_BG} ring-1 ${NEUTRAL_RING}`
                   : 'border-slate-800/60 bg-slate-900/30 hover:border-slate-700',
               )}
             >
               <div className={clsx(
                 'w-9 h-9 rounded-lg flex items-center justify-center border transition-all',
-                isActive ? `${s.bg} ${s.border}` : 'bg-slate-900 border-slate-800 group-hover:border-slate-700',
+                isActive ? `${NEUTRAL_BG} ${NEUTRAL_BORDER}` : 'bg-slate-900 border-slate-800 group-hover:border-slate-700',
               )}>
                 <Icon size={16} className={isActive ? c.text : 'text-slate-600 group-hover:text-slate-400'} />
               </div>
@@ -275,11 +266,11 @@ function StageDetailPanel({ stage, metrics, reports, pendingApprovals, incidents
   return (
     <div className={clsx(
       'rounded-xl border p-5 transition-all duration-300',
-      stage.border, stage.bg, stage.glow,
+      NEUTRAL_BORDER, NEUTRAL_BG,
     )}>
       {/* Stage header */}
       <div className="flex items-start gap-4 mb-5">
-        <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center border flex-shrink-0', stage.border, stage.bg)}>
+        <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center border flex-shrink-0', NEUTRAL_BORDER, NEUTRAL_BG)}>
           <Icon size={22} className={c.text} />
         </div>
         <div className="flex-1 min-w-0">
@@ -304,7 +295,7 @@ function StageDetailPanel({ stage, metrics, reports, pendingApprovals, incidents
       </div>
 
       {/* Objective */}
-      <div className={clsx('rounded-lg border px-4 py-3 mb-4 text-xs text-slate-300 leading-relaxed', stage.border, 'bg-slate-950/40')}>
+      <div className={clsx('rounded-lg border px-4 py-3 mb-4 text-xs text-slate-300 leading-relaxed', NEUTRAL_BORDER, 'bg-slate-950/40')}>
         <span className={clsx('text-[9px] font-mono font-bold uppercase tracking-wider mr-2', c.text)}>OBJECTIVE</span>
         {stage.objective}
       </div>
@@ -814,32 +805,6 @@ function EmptyState({ text }: { text: string }) {
   )
 }
 
-// ─── Kill Chain ───────────────────────────────────────────────────────────────
-function KillChain() {
-  return (
-    <div className="card">
-      <div className="card-header">
-        <Zap size={11} className="text-amber-400" />
-        Attack → Detection → Response — ICS Kill Chain
-      </div>
-      <div className="mt-3 space-y-1.5">
-        {KILL_CHAIN.map((step, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <div className={clsx('text-[9px] font-mono font-bold px-2 py-1 rounded border flex-shrink-0 w-24 text-center', step.bg)}>
-              <span className={step.color}>{step.phase}</span>
-            </div>
-            {i < KILL_CHAIN.length - 1 && <ArrowRight size={11} className="text-slate-700 flex-shrink-0" />}
-            {i === KILL_CHAIN.length - 1 && <ArrowRight size={11} className="text-rose-700 flex-shrink-0" />}
-            <div className={clsx('text-[10px] font-mono px-3 py-1 rounded border flex-1', step.bg)}>
-              <span className="text-slate-400">{step.action}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function StagesPage({ metrics }: Props) {
   const [activeStageId, setActiveStageId] = useState<number>(1)
@@ -867,13 +832,15 @@ export function StagesPage({ metrics }: Props) {
           <ComplianceBand metrics={metrics} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
-              <Eye size={14} className="text-slate-400" />
+              <Shield size={14} className="text-slate-400" />
               <h1 className="text-base font-bold text-white tracking-tight">
-                Platform Stages — IEC 62443 / NIST SP 800-82 Mapping
+                Security Control Posture — IEC 62443 / NIST SP 800-82
               </h1>
             </div>
             <p className="text-[10.5px] text-slate-500 mb-3 leading-relaxed">
-              Each stage maps to a Topic 114 learning objective. Click a stage to drill into live data, model calibration, and security findings.
+              Live status of the six OT security control domains — network segmentation, AI detection, safety
+              integrity, vulnerability management, secure CI/CD, and incident response. Select a domain for its
+              live evidence, mapped to the governing standard.
             </p>
             <PipelineFlow metrics={metrics} activeId={activeStageId} onSelect={setActiveStageId} />
           </div>
@@ -888,9 +855,6 @@ export function StagesPage({ metrics }: Props) {
           incidents={incidents}
           meta={meta}
         />
-
-        {/* Kill chain */}
-        <KillChain />
 
       </div>
     </div>

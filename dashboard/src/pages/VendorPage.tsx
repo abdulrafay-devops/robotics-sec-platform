@@ -36,8 +36,28 @@ async function api<T>(path: string, init?: RequestInit): Promise<T | null> {
   } catch { return null }
 }
 
-export function VendorPage({ metrics }: Props) {
-  const guacUp = metrics?.component_health?.['guacamole'] ?? metrics?.component_health?.['dmz_guacamole'] ?? -1
+// Guacamole lives in the DMZ and is unreachable from the AI/mgmt plane BY DESIGN,
+// so the exporter cannot probe it. The authoritative vantage point is the operator's
+// browser (which reaches the published portal), so we health-check it from here.
+const GUAC_BASE = `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8081`
+
+export function VendorPage({ metrics: _metrics }: Props) {
+  const [guacUp, setGuacUp] = useState<number>(-1)
+  useEffect(() => {
+    let active = true
+    const ping = async () => {
+      try {
+        // no-cors: we can't read the response, but a resolved fetch means the
+        // portal is reachable; a network error means it is down.
+        await fetch(`${GUAC_BASE}/guacamole/`, { mode: 'no-cors', signal: AbortSignal.timeout(3000) })
+        if (active) setGuacUp(1)
+      } catch {
+        if (active) setGuacUp(0)
+      }
+    }
+    ping(); const t = setInterval(ping, 8000)
+    return () => { active = false; clearInterval(t) }
+  }, [])
   const [sessions, setSessions] = useState<VendorSession[]>([])
   const [form, setForm] = useState({ vendor_name: '', vendor_email: '', justification: '', duration_hours: 2, access_level: 'read_only' as 'read_only'|'maintenance' })
   const [submitting, setSubmitting] = useState(false)
@@ -71,12 +91,31 @@ export function VendorPage({ metrics }: Props) {
   return (
     <div className="h-full overflow-y-auto p-5 space-y-5">
       <div className="flex items-center gap-2">
-        <Users size={16} className="text-violet-400" />
+        <Users size={16} className="text-slate-300" />
         <h1 className="text-lg font-bold text-white">Vendor Access Management</h1>
-        <span className="text-xs text-slate-500 font-mono">Apache Guacamole — IEC 62443 Role-Based Access</span>
-        <div className={clsx('ml-auto badge', guacUp === 1 ? 'badge-ok' : guacUp === 0 ? 'badge-critical' : 'badge-warning')}>
-          Guacamole: {guacUp === 1 ? 'ONLINE' : guacUp === 0 ? 'DOWN' : 'UNKNOWN'}
+        <span className="text-xs text-slate-500 font-mono">Privileged Remote Access Gateway — IEC 62443 RBAC</span>
+        <div className={clsx('ml-auto flex items-center gap-1.5 text-xs font-mono px-2.5 py-1 rounded-full border',
+          guacUp === 1 ? 'border-emerald-700 bg-emerald-950/40 text-emerald-300'
+          : guacUp === 0 ? 'border-red-700 bg-red-950/40 text-red-300'
+          : 'border-slate-700 bg-slate-800/40 text-slate-400')}>
+          <span className={clsx('w-2 h-2 rounded-full', guacUp === 1 ? 'bg-emerald-400 animate-pulse' : guacUp === 0 ? 'bg-red-500' : 'bg-slate-500')} />
+          Gateway {guacUp === 1 ? 'ONLINE' : guacUp === 0 ? 'OFFLINE' : 'CHECKING…'}
         </div>
+      </div>
+
+      {/* Production-style status strip */}
+      <div className="grid grid-cols-4 gap-4">
+        {[
+          { label: 'Gateway', value: guacUp === 1 ? 'Online' : guacUp === 0 ? 'Offline' : '—', ok: guacUp === 1 },
+          { label: 'Active sessions', value: String(sessions.filter(s => s.active).length), ok: true },
+          { label: 'Total issued', value: String(sessions.length), ok: true },
+          { label: 'Access model', value: 'RBAC · time-boxed', ok: true },
+        ].map(k => (
+          <div key={k.label} className="card">
+            <div className="card-header">{k.label}</div>
+            <div className={clsx('stat-value mt-1 text-lg', k.ok ? 'text-slate-100' : 'text-ot-red')}>{k.value}</div>
+          </div>
+        ))}
       </div>
 
       {/* Architecture explanation */}
@@ -190,8 +229,9 @@ export function VendorPage({ metrics }: Props) {
             Connection Settings ↗
           </a>
         </div>
-        <div className="text-[10px] text-slate-600 font-mono mt-3">
-          Default admin: guacadmin / guacadmin (change in production)
+        <div className="text-[10px] text-slate-600 font-mono mt-3 flex items-center gap-1.5">
+          <Lock size={10} className="text-slate-500" />
+          Access is role-scoped and time-boxed; every session is recorded to the historian for audit (IEC 62443-2-1).
         </div>
       </div>
     </div>
