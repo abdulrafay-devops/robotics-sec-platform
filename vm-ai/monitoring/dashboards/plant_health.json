@@ -43,7 +43,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage3_safety_state",
           "legendFormat": "",
@@ -103,7 +103,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage3_sis_integrity",
           "legendFormat": "",
@@ -163,7 +163,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_iec62443_compliance_score",
           "legendFormat": "",
@@ -223,7 +223,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage6_open_incidents",
           "legendFormat": "",
@@ -283,7 +283,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage1_modbus_traffic_rate",
           "legendFormat": "",
@@ -343,7 +343,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage2_latest_iforest_score",
           "legendFormat": "",
@@ -403,7 +403,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage3_safety_state",
           "legendFormat": "Safety State",
@@ -412,7 +412,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage3_sis_integrity",
           "legendFormat": "SIS Integrity",
@@ -486,7 +486,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_iec62443_compliance_score",
           "legendFormat": "Compliance %",
@@ -572,7 +572,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_component_up{component=~\"stage3_openplc_production|stage3_openplc_safety\"}",
           "legendFormat": "{{component}}",
@@ -626,7 +626,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_component_up{component!~\"stage3_openplc.*\"}",
           "legendFormat": "{{component}}",
@@ -680,7 +680,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage1_modbus_traffic_rate",
           "legendFormat": "Alerts/sec",
@@ -689,7 +689,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "rate(lab_stage2_alerts_total{category=\"modbus-external-anomaly\"}[2m])",
           "legendFormat": "External Anomaly Rate",
@@ -698,7 +698,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "rate(lab_stage2_alerts_total{category=\"modbus-baseline-deviation\"}[2m])",
           "legendFormat": "Baseline Deviation Rate",

@@ -43,7 +43,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage6_open_incidents",
           "legendFormat": "",
@@ -103,7 +103,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage6_pending_approvals",
           "legendFormat": "",
@@ -163,7 +163,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage3_safety_state",
           "legendFormat": "",
@@ -223,7 +223,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_attack_injection_active",
           "legendFormat": "",
@@ -279,7 +279,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_detection_latency_seconds",
           "legendFormat": "",
@@ -339,7 +339,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_iec62443_compliance_score",
           "legendFormat": "",
@@ -411,7 +411,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage2_latest_iforest_score",
           "legendFormat": "",
@@ -470,7 +470,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage2_latest_pca_z",
           "legendFormat": "",
@@ -529,7 +529,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage6_incidents_by_playbook{playbook!=\"none\"}",
           "legendFormat": "{{playbook}}",
@@ -587,7 +587,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage2_latest_iforest_score",
           "legendFormat": "IForest Score",
@@ -596,7 +596,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage2_latest_pca_z / 7",
           "legendFormat": "PCA Z-Score (normalized /7)",
@@ -605,7 +605,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "0.15 + 0 * lab_stage2_latest_iforest_score",
           "legendFormat": "IF Alert Threshold 0.15",
@@ -687,7 +687,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "rate(lab_stage2_alerts_total{category!~\"none|unknown\"}[1m]) * 60",
           "legendFormat": "{{category}}",
@@ -741,7 +741,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_component_up{component=~\"stage3_openplc_production|stage3_openplc_safety|stage2_score_service|stage2_redis_bus\"}",
           "legendFormat": "{{component}}",

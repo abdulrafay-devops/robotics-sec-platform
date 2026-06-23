@@ -43,7 +43,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_iec62443_compliance_score",
           "legendFormat": "",
@@ -102,7 +102,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "max(lab_stage5_pipeline_last_verdict{verdict=\"PASS\"})",
           "legendFormat": "",
@@ -158,7 +158,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage5_pipeline_age_seconds",
           "legendFormat": "",
@@ -218,7 +218,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage3_sis_integrity",
           "legendFormat": "",
@@ -278,7 +278,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage6_pending_approvals",
           "legendFormat": "",
@@ -338,7 +338,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_iec62443_compliance_score",
           "legendFormat": "IEC 62443 Score (%)",
@@ -424,7 +424,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage4_vuln_count{severity=\"critical\"}",
           "legendFormat": "",
@@ -480,7 +480,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage4_vuln_count{severity=\"high\"}",
           "legendFormat": "",
@@ -540,7 +540,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage4_vuln_count{severity=\"medium\"}",
           "legendFormat": "",
@@ -600,7 +600,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage4_firmware_patch_status",
           "legendFormat": "",
@@ -660,7 +660,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage4_vuln_count{severity!=\"none\"}",
           "legendFormat": "{{severity}}",
@@ -718,7 +718,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage4_vuln_count{severity=\"critical\"}",
           "legendFormat": "Critical (CVSS \u22659)",
@@ -727,7 +727,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage4_vuln_count{severity=\"high\"}",
           "legendFormat": "High (CVSS 7-9)",
@@ -736,7 +736,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage4_vuln_count{severity=\"medium\"}",
           "legendFormat": "Medium (CVSS 4-7)",
@@ -802,7 +802,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage4_baseline_drift_count{severity=\"critical\"}",
           "legendFormat": "",
@@ -858,7 +858,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage4_baseline_drift_count{severity!=\"none\"}",
           "legendFormat": "Drift {{severity}}",
@@ -916,7 +916,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage4_baseline_drift_count{severity!=\"none\"}",
           "legendFormat": "{{severity}}",
@@ -982,7 +982,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "rate(lab_stage2_alerts_total{category!~\"none|unknown\"}[1m]) * 60",
           "legendFormat": "{{category}}",
@@ -1036,7 +1036,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage2_alert_severity_total{severity!=\"none\"}",
           "legendFormat": "Severity {{severity}}",

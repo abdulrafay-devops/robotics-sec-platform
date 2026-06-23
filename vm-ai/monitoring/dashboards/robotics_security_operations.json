@@ -45,7 +45,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "min(lab_component_up)",
           "legendFormat": "",
@@ -101,7 +101,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage3_safety_state",
           "legendFormat": "",
@@ -161,7 +161,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_iec62443_compliance_score",
           "legendFormat": "",
@@ -221,7 +221,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "sum(lab_stage2_alerts_total{category!~\"none|unknown\"})",
           "legendFormat": "",
@@ -281,7 +281,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage6_open_incidents",
           "legendFormat": "",
@@ -341,7 +341,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "max(lab_stage5_pipeline_last_verdict{verdict=\"PASS\"})",
           "legendFormat": "",
@@ -409,7 +409,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage2_latest_iforest_score",
           "legendFormat": "",
@@ -468,7 +468,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage2_latest_pca_z",
           "legendFormat": "",
@@ -527,7 +527,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage2_latest_tf_z",
           "legendFormat": "",
@@ -586,7 +586,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage2_latest_iforest_score",
           "legendFormat": "IForest Score",
@@ -595,7 +595,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "0.15 + 0 * lab_stage2_latest_iforest_score",
           "legendFormat": "Alert Threshold 0.15",
@@ -677,7 +677,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_detection_latency_seconds",
           "legendFormat": "",
@@ -737,7 +737,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_attack_injection_active",
           "legendFormat": "",
@@ -793,7 +793,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_attack_injection_total",
           "legendFormat": "",
@@ -845,7 +845,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage3_sis_integrity",
           "legendFormat": "",
@@ -905,7 +905,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage6_pending_approvals",
           "legendFormat": "",
@@ -965,7 +965,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage1_modbus_traffic_rate",
           "legendFormat": "",
@@ -1025,7 +1025,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "rate(lab_stage2_alerts_total{category!~\"none|unknown\"}[1m]) * 60",
           "legendFormat": "{{category}}",
@@ -1079,7 +1079,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "rate(lab_stage2_alerts_total{category=\"modbus-external-anomaly\"}[1m]) * 60",
           "legendFormat": "External Anomaly",
@@ -1088,7 +1088,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "rate(lab_stage2_alerts_total{category=\"modbus-baseline-deviation\"}[1m]) * 60",
           "legendFormat": "Baseline Deviation",
@@ -1097,7 +1097,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage1_modbus_traffic_rate * 60",
           "legendFormat": "Raw Modbus Rate (alerts/min)",
@@ -1163,7 +1163,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_component_up",
           "legendFormat": "{{component}}",
@@ -1217,7 +1217,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_security_sensor_log_up",
           "legendFormat": "{{sensor}}",
@@ -1271,7 +1271,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_zeek_modbus_features_total",
           "legendFormat": "Zeek Modbus Rows",
@@ -1337,7 +1337,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage4_vuln_count{severity!=\"none\"}",
           "legendFormat": "CVE {{severity}}",
@@ -1395,7 +1395,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage4_baseline_drift_count{severity!=\"none\"}",
           "legendFormat": "Drift {{severity}}",
@@ -1453,7 +1453,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage5_pipeline_age_seconds",
           "legendFormat": "",
@@ -1513,7 +1513,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "lab-prometheus"
           },
           "expr": "lab_stage6_incidents_by_playbook{playbook!=\"none\"}",
           "legendFormat": "{{playbook}}",
