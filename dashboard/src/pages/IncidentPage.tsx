@@ -382,7 +382,9 @@ export function IncidentPage({ metrics }: Props) {
                         <td className="py-2 pr-4">
                           {inc.closed
                             ? <span className="badge badge-info">Closed</span>
-                            : <span className="badge badge-critical animate-pulse">Active</span>}
+                            : (inc as any).pending_approval
+                              ? <span className="badge badge-warning animate-pulse">Awaiting Approval</span>
+                              : <span className="badge badge-critical animate-pulse">Active</span>}
                         </td>
                         <td className="py-2 text-slate-500 text-[10px]">{new Date(inc.opened_at).toLocaleString()}</td>
                       </tr>

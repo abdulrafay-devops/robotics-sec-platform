@@ -226,6 +226,16 @@ def main() -> int:
             _last_written_ts[dedup_key] = now_t
 
             line = json.dumps(record, separators=(",", ":"))
+            # Reopen if the alert file was deleted/rotated out from under us — a
+            # held handle to an unlinked inode silently swallows alerts (e.g. after
+            # an IR-state reset), which looks like "detection works but no incidents".
+            try:
+                if not os.path.exists(ALERT_FILE):
+                    fh.close()
+                    fh = open(ALERT_FILE, "a", buffering=1, encoding="utf-8")
+                    LOG.warning("alert file was missing — reopened %s", ALERT_FILE)
+            except Exception:  # noqa: BLE001
+                pass
             fh.write(line + "\n")
             fh.flush()
             LOG.info("alert -> %s", line[:200])

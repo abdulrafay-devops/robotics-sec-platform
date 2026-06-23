@@ -365,7 +365,7 @@ def _handle(event: dict, playbooks: list[dict]) -> None:
     # a post-mortem was committed. In a demo environment post-mortems are never
     # committed, so after the first incident every subsequent attack of the same
     # type was silently dropped. Now we allow a new incident after 5 minutes.
-    LESSONS_BLOCK_TIMEOUT_S = 300
+    LESSONS_BLOCK_TIMEOUT_S = 90
     # Identity for de-dup: the precise MITRE technique when available, else the
     # coarse category. This is what makes two DIFFERENT attacks open two incidents
     # while a single sustained attack still folds into one.
@@ -498,6 +498,12 @@ def _handle(event: dict, playbooks: list[dict]) -> None:
         if not _run_step(step, ctx, audit):
             overall = False
             break
+    # An incident is OPEN while any step is awaiting analyst approval — queuing a
+    # human-approval step is "success" for the engine loop, but the incident is not
+    # resolved until those steps are approved/executed and the post-mortem is filed.
+    # (Previously closed=overall marked such incidents closed immediately, so they
+    # vanished from the open-incident count even with pending approvals.)
+    has_pending = any(s.get('status') == 'pending_approval' for s in audit)
     _record_incident({
         'incident_id': incident_id,
         'playbook': pb['id'],
@@ -511,7 +517,8 @@ def _handle(event: dict, playbooks: list[dict]) -> None:
         'severity': pb.get('severity') or event.get('severity'),
         'event': event,
         'steps': audit,
-        'closed': overall,
+        'closed': overall and not has_pending,
+        'pending_approval': has_pending,
         'opened_at': dt.datetime.utcnow().isoformat(timespec='seconds') + 'Z',
     })
 
