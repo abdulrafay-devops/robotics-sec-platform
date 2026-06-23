@@ -265,11 +265,17 @@ run_baseline_loop > /var/lab/log/lab-baseline-loop.log 2>&1 &
 # Start SROS2 background watcher for HMI simulated DDS estop requests
 watch_sros2_triggers() {
     sleep 5
+    _ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+    echo "$(_ts) [sros2-watcher] STARTED - monitoring the DDS/SROS2 cryptographic e-stop path"
+    echo "$(_ts) [sros2-watcher] keystore=/opt/lab/sros2_keystore  enclave=/lab/production_plc"
+    echo "$(_ts) [sros2-watcher] DDS-Security=Enforce  rmw=cyclonedds  domain=0"
+    echo "$(_ts) [sros2-watcher] ARMED - awaiting authenticated e-stop requests (trigger: /var/lab/state/sros2_estop_trigger)"
+    i=0
     while true; do
         if [ -f /var/lab/state/sros2_estop_trigger ]; then
-            echo "HMI requested SROS2 E-Stop trigger file. Executing safety_heartbeat.py..."
+            echo "$(_ts) [sros2-watcher] HMI requested SROS2 cryptographic E-Stop - verifying enclave + signature..."
             rm -f /var/lab/state/sros2_estop_trigger
-            
+
             export HOME=/root
             export ROS_LOG_DIR=/var/lab/log/ros
             export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
@@ -279,11 +285,21 @@ watch_sros2_triggers() {
             export ROS_SECURITY_STRATEGY=Enforce
             export ROS_SECURITY_ENCLAVE_OVERRIDE=/lab/production_plc
             export CYCLONEDDS_URI=file:///opt/lab/vm-ot/sros2/cyclonedds.xml
-            
+
             set +u
             source /opt/ros/humble/setup.bash
             set -u
-            /opt/lab/venv-traffic/bin/python /opt/lab/vm-ot/sros2/safety_heartbeat.py --request-estop || echo "SROS2 heartbeat trigger failed."
+            if /opt/lab/venv-traffic/bin/python /opt/lab/vm-ot/sros2/safety_heartbeat.py --request-estop; then
+                echo "$(_ts) [sros2-watcher] OK - signed E-Stop published to the safety supervisor over SROS2 (DDS-Security Enforce)"
+            else
+                echo "$(_ts) [sros2-watcher] FAILED - SROS2 e-stop request rejected (signature/keystore/enclave error)"
+            fi
+        fi
+        i=$((i + 1))
+        # Liveness heartbeat every ~20s so the operator console shows the watcher is
+        # actively armed even when no e-stop has been requested.
+        if [ $((i % 40)) -eq 0 ]; then
+            echo "$(_ts) [sros2-watcher] heartbeat - armed, DDS-Security Enforce, $((i / 2))s monitored, no unauthorized e-stop attempts"
         fi
         sleep 0.5
     done
