@@ -1,6 +1,7 @@
 import type { HMIState, PrometheusMetrics, PageId } from '../types'
 import { Activity, Server, Shield, Wifi, WifiOff, ArrowRight } from 'lucide-react'
 import { clsx } from 'clsx'
+import { useState, useEffect } from 'react'
 import { useLiveScores, useIncidents } from '../hooks/useMetrics'
 
 interface Props {
@@ -54,100 +55,71 @@ function ComponentDot({ name, up }: { name: string; up: number }) {
   )
 }
 
+function Zone({ x, y, w, h, name, level, cidr, hosts, accent, danger }: {
+  x: number; y: number; w: number; h: number; name: string; level: string; cidr: string; hosts: string[]; accent: string; danger?: boolean
+}) {
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <rect width={w} height={h} rx="8" fill="#0a0f17" stroke={danger ? '#ef4444' : '#1e293b'} strokeWidth="1.5" />
+      <rect width="4" height={h} rx="2" fill={danger ? '#ef4444' : accent} />
+      <text x="14" y="18" fill={danger ? '#f87171' : '#cbd5e1'} fontSize="10.5" fontWeight="700">{name}</text>
+      <text x={w - 12} y="18" textAnchor="end" fill="#64748b" fontSize="8" fontFamily="monospace">{level}</text>
+      <text x="14" y="31" fill="#475569" fontSize="8" fontFamily="monospace">{cidr}</text>
+      {hosts.map((hh, i) => (
+        <text key={i} x="14" y={48 + i * 13} fill="#94a3b8" fontSize="9">{hh}</text>
+      ))}
+    </g>
+  )
+}
+
 function TopologyMap({ metrics }: { metrics: PrometheusMetrics | null }) {
   const isAttack = (metrics?.injection_active ?? 0) > 0
-  const flowSpeed = isAttack ? '0.6s' : '2s'
-  
+  const conduit = (d: string, label?: string, lx?: number, ly?: number) => (
+    <g>
+      <path d={d} stroke="#334155" strokeWidth="1.5" fill="none" markerEnd="url(#tArrow)" />
+      <path d={d} stroke={isAttack ? '#f43f5e' : '#38bdf8'} strokeWidth="1.5" strokeDasharray="5 7" fill="none"
+        className="flow-path" style={{ animationDuration: isAttack ? '0.8s' : '2.4s', opacity: 0.5 }} />
+      {label && <text x={lx} y={ly} textAnchor="middle" fontSize="7.5" fill="#64748b" fontFamily="monospace">{label}</text>}
+    </g>
+  )
   return (
-    <div className="relative w-full h-[230px] bg-slate-950/40 border border-border-dim/60 rounded-lg p-4 overflow-hidden">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-          Live ISA/IEC 62443 Microsegmentation Flow Map
-        </div>
-        <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500">
-          <span className={clsx("w-2 h-2 rounded-full", isAttack ? "bg-red-500 animate-pulse" : "bg-emerald-500")} />
-          {isAttack ? "ATTACK PATH ACTIVE" : "SEGMENTATION STATE NOMINAL"}
-        </div>
+    <div className="card">
+      <div className="card-header flex items-center">
+        Network Segmentation — IEC 62443 Zones &amp; Conduits
+        <span className={clsx('ml-auto flex items-center gap-1.5 normal-case tracking-normal text-[10px] px-2 py-0.5 rounded-full border',
+          isAttack ? 'border-red-700 bg-red-950/40 text-red-300' : 'border-emerald-800 bg-emerald-950/30 text-emerald-300')}>
+          <span className={clsx('w-1.5 h-1.5 rounded-full', isAttack ? 'bg-red-500 animate-pulse' : 'bg-emerald-400')} />
+          {isAttack ? 'Attack contained in OT zone' : 'Default-deny enforced · matrix 16/16'}
+        </span>
       </div>
-
-      <svg className="w-full h-[180px]" viewBox="0 0 800 160">
+      <svg viewBox="0 0 800 300" className="w-full h-auto mt-1" preserveAspectRatio="xMidYMid meet">
         <defs>
-          <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M 0 2 L 10 5 L 0 8 z" fill="#475569" />
-          </marker>
-          <marker id="arrow-cyan" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M 0 2 L 10 5 L 0 8 z" fill="#06b6d4" />
-          </marker>
-          <marker id="arrow-red" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M 0 2 L 10 5 L 0 8 z" fill="#f43f5e" />
+          <marker id="tArrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0 2 L9 5 L0 8 z" fill="#334155" />
           </marker>
         </defs>
-
-        {/* Connections */}
-        {/* IT -> DMZ Link */}
-        <path d="M 170 65 L 290 65" stroke="#1e293b" strokeWidth="2" fill="none" markerEnd="url(#arrow)" />
-        <path d="M 170 65 L 290 65" stroke="#38bdf8" strokeWidth="2" strokeDasharray="6 6" fill="none" className="flow-path" style={{ animationDuration: '2.5s' }} />
-
-        {/* DMZ -> OT Control Link */}
-        <path d="M 430 65 L 610 65" stroke="#1e293b" strokeWidth="2" fill="none" markerEnd="url(#arrow)" />
-        <path d="M 430 65 L 610 65" stroke="#22d3ee" strokeWidth="2" strokeDasharray="8 8" fill="none" className="flow-path" style={{ animationDuration: flowSpeed }} />
-
-        {/* OT -> Security Mirror Link (SPAN) */}
-        <path d="M 670 95 L 670 125 L 520 125" stroke="#1e293b" strokeWidth="1.5" fill="none" markerEnd="url(#arrow)" />
-        <path d="M 670 95 L 670 125 L 520 125" stroke="#34d399" strokeWidth="1.5" strokeDasharray="5 5" fill="none" className="flow-path" style={{ animationDuration: '1.2s' }} />
-
-        {/* Security -> Mgmt/AI Link */}
-        <path d="M 400 125 L 250 125 L 250 95" stroke="#1e293b" strokeWidth="1.5" fill="none" markerEnd="url(#arrow)" />
-        <path d="M 400 125 L 250 125 L 250 95" stroke="#a78bfa" strokeWidth="1.5" strokeDasharray="5 5" fill="none" className="flow-path" style={{ animationDuration: '1.5s' }} />
-
-        {/* Mgmt/AI -> OT Control Link (Mitigation Flow) */}
-        <path d="M 170 45 C 230 10, 550 10, 610 45" stroke="#1e293b" strokeWidth="1.5" fill="none" strokeDasharray="4 4" markerEnd={isAttack ? "url(#arrow-red)" : "url(#arrow-cyan)"} />
-        {isAttack && (
-          <path d="M 170 45 C 230 10, 550 10, 610 45" stroke="#f43f5e" strokeWidth="2" strokeDasharray="6 6" fill="none" className="flow-path" style={{ animationDuration: '0.8s' }} />
-        )}
-
-        {/* Node 1: IT Zone */}
-        <g transform="translate(10, 25)">
-          <rect width="160" height="70" rx="6" fill="#040810" stroke="#1e293b" strokeWidth="1.5" />
-          <text x="12" y="20" fill="#64748b" fontSize="8" fontWeight="bold" fontFamily="monospace">IT ZONE L4</text>
-          <text x="12" y="32" fill="#475569" fontSize="7.5" fontFamily="monospace">192.168.20.0/24</text>
-          <text x="12" y="48" fill="#e2e8f0" fontSize="9.5" fontWeight="bold">lab-gitea (Git Repo)</text>
-          <text x="12" y="60" fill="#e2e8f0" fontSize="9.5" fontWeight="bold">lab-runner (CI)</text>
-        </g>
-
-        {/* Node 2: DMZ Zone */}
-        <g transform="translate(290, 25)">
-          <rect width="140" height="70" rx="6" fill="#040810" stroke="#0e7490" strokeWidth="1.5" className="border-glow-cyan" />
-          <text x="12" y="20" fill="#06b6d4" fontSize="8" fontWeight="bold" fontFamily="monospace">DMZ ZONE L3.5</text>
-          <text x="12" y="32" fill="#0891b2" fontSize="7.5" fontFamily="monospace">192.168.30.0/24</text>
-          <text x="12" y="48" fill="#e2e8f0" fontSize="9.5" fontWeight="bold">guacamole :8081</text>
-          <text x="12" y="60" fill="#e2e8f0" fontSize="9.5" fontWeight="bold">L3 SCADA Monitor :8086</text>
-        </g>
-
-        {/* Node 3: Security & AI Zone (Management) */}
-        <g transform="translate(90, 105)">
-          <rect width="160" height="50" rx="6" fill="#040810" stroke="#6d28d9" strokeWidth="1.5" />
-          <text x="12" y="16" fill="#a78bfa" fontSize="8" fontWeight="bold" fontFamily="monospace">MGMT & AI ZONE L3</text>
-          <text x="12" y="26" fill="#7c3aed" fontSize="7.5" fontFamily="monospace">192.168.40.0/24</text>
-          <text x="12" y="40" fill="#e2e8f0" fontSize="9.5" fontWeight="bold">FastAPI score_service</text>
-        </g>
-
-        {/* Node 4: Passive Security Zone (Zeek/Suricata IDS) */}
-        <g transform="translate(400, 105)">
-          <rect width="120" height="40" rx="4" fill="#040810" stroke="#047857" strokeWidth="1" />
-          <text x="10" y="16" fill="#34d399" fontSize="7.5" fontWeight="bold" fontFamily="monospace">PASSIVE IDS L3</text>
-          <text x="10" y="28" fill="#a1a1aa" fontSize="9" fontWeight="bold">Zeek + Suricata</text>
-        </g>
-
-        {/* Node 5: OT Control Zone */}
-        <g transform="translate(610, 25)">
-          <rect width="180" height="70" rx="6" fill="#040810" stroke={isAttack ? "#ef4444" : "#991b1b"} strokeWidth="1.5" className={isAttack ? "border-glow-red" : ""} />
-          <text x="12" y="20" fill={isAttack ? "#f43f5e" : "#f43f5e"} fontSize="8" fontWeight="bold" fontFamily="monospace">OT CONTROL L0-2</text>
-          <text x="12" y="32" fill="#be123c" fontSize="7.5" fontFamily="monospace">192.168.10.0/24</text>
-          <text x="12" y="48" fill="#e2e8f0" fontSize="9.5" fontWeight="bold">OpenPLC Production :502</text>
-          <text x="12" y="60" fill="#e2e8f0" fontSize="9.5" fontWeight="bold">OpenPLC Safety :503</text>
+        {/* conduits converge on the firewall */}
+        {conduit('M 214 149 L 326 149', 'signed deploy', 270, 142)}
+        {conduit('M 474 149 L 586 149', 'telemetry RO · ctrl gw', 530, 142)}
+        {conduit('M 400 86 L 400 118')}
+        {conduit('M 400 178 L 400 220')}
+        {/* zones */}
+        <Zone x={20} y={110} w={194} h={78} name="IT ZONE" level="L4" cidr="192.168.20.0/24" hosts={['Gitea repository', 'Act CI runner']} accent="#475569" />
+        <Zone x={303} y={14} w={194} h={70} name="INDUSTRIAL DMZ" level="L3.5" cidr="192.168.30.0/24" hosts={['Guacamole gateway', 'Deploy / historian store']} accent="#0e7490" />
+        <Zone x={586} y={110} w={194} h={78} name="OT CELL" level="L0–L2" cidr="192.168.10.0/24" hosts={['OpenPLC + Safety PLC', 'Robot (ROS2 / Gazebo)']} accent="#9f1239" danger={isAttack} />
+        <Zone x={303} y={220} w={194} h={72} name="MGMT / AI + SENSOR" level="L3" cidr="192.168.40.0/24" hosts={['AI score_service', 'Zeek + Suricata IDS']} accent="#6d28d9" />
+        {/* central firewall (only multi-homed node) */}
+        <g transform="translate(330,121)">
+          <rect width="140" height="56" rx="8" fill="#1a1206" stroke="#b45309" strokeWidth="1.5" />
+          <text x="70" y="21" textAnchor="middle" fill="#fbbf24" fontSize="11.5" fontWeight="700">router-fw</text>
+          <text x="70" y="34" textAnchor="middle" fill="#a16207" fontSize="7.5" fontFamily="monospace">nftables · default-deny</text>
+          <text x="70" y="46" textAnchor="middle" fill="#a16207" fontSize="7.5" fontFamily="monospace">8 conduits · L7 Modbus proxy</text>
         </g>
       </svg>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[9px] font-mono text-slate-600">
+        <span><span className="text-slate-400">router-fw</span> is the only multi-homed node — every cross-zone packet is inspected.</span>
+        <span className="ml-auto">IT ↛ OT blocked · AI reads OT read-only via proxy · OT pulls signed deploys from DMZ</span>
+      </div>
     </div>
   )
 }
@@ -172,6 +144,32 @@ export function OverviewPage({ hmiState, metrics, connected, onNavigate }: Props
   const openIncidents = incidents.length > 0
     ? incidents.filter(i => !i.closed && !(i as any).postmortem_committed && !(i as any).blocked && !(i as any).merged).length
     : Math.max(0, Math.round(metrics?.open_incidents ?? 0))
+
+  // Cross-zone services (IT Gitea, DMZ Guacamole) are unreachable from the AI/mgmt
+  // monitoring plane BY SEGMENTATION DESIGN, so the exporter can't probe them — it
+  // would falsely report DOWN. The operator's browser CAN reach their published
+  // portals, so we health-check them here and merge with the exporter components.
+  const [extHealth, setExtHealth] = useState<Record<string, number>>({ it_gitea: -1, dmz_guacamole: -1 })
+  useEffect(() => {
+    let active = true
+    const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+    const checks: [string, string][] = [
+      ['it_gitea', `http://${host}:3000/`],
+      ['dmz_guacamole', `http://${host}:8081/guacamole/`],
+    ]
+    const run = async () => {
+      const out: Record<string, number> = {}
+      await Promise.all(checks.map(async ([k, url]) => {
+        try { await fetch(url, { mode: 'no-cors', signal: AbortSignal.timeout(3000) }); out[k] = 1 }
+        catch { out[k] = 0 }
+      }))
+      if (active) setExtHealth(out)
+    }
+    run(); const t = setInterval(run, 8000)
+    return () => { active = false; clearInterval(t) }
+  }, [])
+  // All platform services: exporter-probed (mgmt-reachable) + browser-probed (cross-zone).
+  const allComponents = { ...(metrics?.component_health ?? {}), ...extHealth }
 
   return (
     <div className="h-full overflow-y-auto p-5 space-y-5">
@@ -274,14 +272,19 @@ export function OverviewPage({ hmiState, metrics, connected, onNavigate }: Props
 
       {/* Component health grid */}
       <div className="card">
-        <div className="card-header">VLAN Node & Component Health Status</div>
-        <div className="grid grid-cols-5 gap-3 mt-2">
-          {Object.entries(metrics?.component_health ?? {}).map(([name, up]) => (
+        <div className="card-header flex items-center">
+          Platform Service Health
+          <span className="ml-auto normal-case tracking-normal text-[9px] text-slate-600">
+            mgmt-plane probes · cross-zone (IT/DMZ) checked from console
+          </span>
+        </div>
+        <div className="grid grid-cols-3 md:grid-cols-5 gap-3 mt-2">
+          {Object.entries(allComponents).map(([name, up]) => (
             <ComponentDot key={name} name={name} up={up} />
           ))}
-          {!metrics && Array.from({ length: 10 }).map((_, i) => (
+          {!metrics && Object.keys(extHealth).length === 0 && Array.from({ length: 9 }).map((_, i) => (
             <div key={i} className="flex items-center gap-2 text-xs font-mono text-slate-700 bg-slate-900/20 border border-slate-800/20 rounded px-2.5 py-1.5">
-              <span className="status-dot bg-slate-800 animate-pulse" />loading node…
+              <span className="status-dot bg-slate-800 animate-pulse" />loading…
             </div>
           ))}
         </div>
