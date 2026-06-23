@@ -417,15 +417,23 @@ def _trend_summary() -> dict:
     anomalies = sum(1 for (_, _, _, a) in items if a)
     rate = (anomalies / n) * 100.0
 
-    # Trend: compare mean of last 20 vs previous 40
+    # Trend: compare mean of last 20 vs previous 40. Use a DEAD-BAND so the normal
+    # window-to-window jitter of the live activity does not make the forecast
+    # flip-flop stable/rising on a calm baseline. Only call it rising/falling on a
+    # change that is both meaningfully relative AND above an absolute floor; an
+    # actual anomaly in the recent window also forces "rising".
     last20 = [s for (_, s, _, _) in items[-20:] if s is not None]
     prev40 = [s for (_, s, _, _) in items[:-20] if s is not None][-40:]
     m20 = sum(last20) / max(len(last20), 1) if last20 else 0.0
     m40 = sum(prev40) / max(len(prev40), 1) if prev40 else 0.0
+    recent_anom = any(a for (_, _, _, a) in items[-10:])
+    band = max(0.20 * m40, 0.10)   # need a real jump, not baseline noise
     direction = "stable"
-    if m20 > m40 * 1.05:
+    if len(prev40) < 10:
+        direction = "stable"        # not enough history yet — don't guess (cold start)
+    elif recent_anom or m20 > m40 + band:
         direction = "rising"
-    elif m20 < m40 * 0.95:
+    elif m20 < m40 - band:
         direction = "falling"
 
     # Predict breach within 300s using simple linear extrapolation

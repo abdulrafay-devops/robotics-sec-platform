@@ -419,7 +419,7 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
           <div className="card flex flex-col items-center py-3 gap-1">
             <div className="card-header justify-center !mb-1">IsolationForest</div>
             <ArcGauge value={ifAct ?? -1} max={1.0} dangerAt={0.95} warnAt={0.82}
-              label="Anomaly score" sublabel="0.5 = boundary" />
+              label="Anomaly score" sublabel="normal ~0.5 · alert ≥0.9" />
             <div className={clsx('text-[8.5px] font-mono text-center mt-0.5',
               ifAct == null ? 'text-slate-700' : ifAct >= 0.95 ? 'text-red-400 font-bold' : ifAct >= 0.82 ? 'text-amber-400' : 'text-emerald-500')}>
               {ifAct == null ? '— WAITING'
@@ -722,12 +722,15 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
 
           <div className="flex-1 overflow-y-auto">
             {filteredAlerts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-slate-800 gap-2">
-                <Shield size={28} className="text-slate-900" />
-                <span className="text-[11px] font-mono">
+              <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-2">
+                <Shield size={28} className="text-emerald-600/70" />
+                <span className="text-[11px] font-mono text-slate-400">
                   {alertFilter === 'anomaly'
-                    ? 'No anomalies detected — system nominal'
-                    : 'No events yet — waiting for data…'}
+                    ? '✓ No anomalies detected — system nominal'
+                    : 'No events yet — inject an attack to populate the log'}
+                </span>
+                <span className="text-[9px] font-mono text-slate-600">
+                  Anomaly alerts stream here live when the AI flags an attack
                 </span>
               </div>
             ) : (
