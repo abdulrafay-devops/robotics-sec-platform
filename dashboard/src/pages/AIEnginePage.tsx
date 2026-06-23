@@ -149,70 +149,105 @@ function ArcGauge({
   )
 }
 
-// ─── Score Sparkline ──────────────────────────────────────────────────────────
+// ─── Detection-activity time-series chart ──────────────────────────────────────
 function Sparkline({ history }: {
   history: Array<{ ts: number; iforest_score: number | null; anomaly: boolean }>
 }) {
-  const W = 260, H = 58, P = 5
+  const [hover, setHover] = useState<number | null>(null)
   if (history.length < 2) {
     return (
-      <div className="flex items-center justify-center w-full h-full text-slate-700 text-[10px] font-mono">
-        awaiting score history…
+      <div className="flex items-center justify-center w-full text-slate-600 text-[11px]" style={{ height: 172 }}>
+        Awaiting score history…
       </div>
     )
   }
-  const n      = history.length
-  const scores = history.map(d => d.iforest_score ?? 0)
-  const maxVal = Math.max(0.25, ...scores) * 1.12
-
-  const toXY = (i: number, v: number) => ({
-    x: P + (i / (n - 1)) * (W - 2 * P),
-    y: (H - P) - (Math.max(0, v) / maxVal) * (H - 2 * P),
-  })
-
-  const linePoints = scores.map((s, i) => {
-    const { x, y } = toXY(i, s)
-    return `${x.toFixed(1)},${y.toFixed(1)}`
-  }).join(' ')
-
-  const areaPoints = [
-    `${P},${H - P}`,
-    ...scores.map((s, i) => { const { x, y } = toXY(i, s); return `${x.toFixed(1)},${y.toFixed(1)}` }),
-    `${(P + (W - 2 * P)).toFixed(1)},${H - P}`,
-  ].join(' ')
-
-  const thrY = (H - P) - (0.15 / maxVal) * (H - 2 * P)
+  const W = 640, H = 172
+  const mL = 34, mR = 12, mT = 10, mB = 20
+  const plotW = W - mL - mR, plotH = H - mT - mB
+  const n = history.length
+  const vals = history.map(d => Math.max(0, d.iforest_score ?? 0))
+  const dataMax = Math.max(...vals)
+  const yMax = Math.max(1.0, dataMax * 1.15)
+  const X = (i: number) => mL + (i / (n - 1)) * plotW
+  const Y = (v: number) => mT + plotH - (Math.min(v, yMax) / yMax) * plotH
+  const pts = vals.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`)
+  const linePath = 'M' + pts.join(' L')
+  const areaPath = `M${X(0).toFixed(1)},${(mT + plotH).toFixed(1)} L${pts.join(' L')} L${X(n - 1).toFixed(1)},${(mT + plotH).toFixed(1)} Z`
+  const yTicks = [0, 0.25, 0.5, 0.75, 1.0].filter(t => t <= yMax + 0.001)
+  const t1 = history[n - 1].ts
+  const ago = (ts: number) => Math.max(0, Math.round(t1 - ts))
+  const cur = vals[n - 1]
+  const hv = hover != null ? Math.max(0, Math.min(n - 1, hover)) : null
+  const anomalies = history.filter(d => d.anomaly).length
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.55" />
-          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {/* Grid */}
-      {[0.25, 0.5, 0.75].map(g => {
-        const gy = (H - P) - g * (H - 2 * P)
-        return <line key={g} x1={P} y1={gy} x2={W - P} y2={gy} stroke="#0f172a" strokeWidth="0.8" />
-      })}
-      {/* Area fill */}
-      <polygon points={areaPoints} fill="url(#sg)" />
-      {/* Threshold at 0.15 */}
-      {thrY > P && thrY < H - P && (
-        <line x1={P} y1={thrY} x2={W - P} y2={thrY}
-          stroke="#f59e0b" strokeWidth="1" strokeDasharray="5 3" opacity="0.65" />
-      )}
-      {/* Score line */}
-      <polyline points={linePoints} fill="none" stroke="#3b82f6" strokeWidth="1.6"
-        strokeLinecap="round" strokeLinejoin="round" />
-      {/* Anomaly dots */}
-      {history.map((d, i) => {
-        if (!d.anomaly) return null
-        const { x, y } = toXY(i, d.iforest_score ?? 0)
-        return <circle key={i} cx={x.toFixed(1)} cy={y.toFixed(1)} r="2.8" fill="#ef4444" />
-      })}
-    </svg>
+    <div className="relative w-full"
+      onMouseLeave={() => setHover(null)}
+      onMouseMove={(e) => {
+        const r = e.currentTarget.getBoundingClientRect()
+        const px = ((e.clientX - r.left) / r.width) * W
+        if (px < mL || px > W - mR) { setHover(null); return }
+        setHover(Math.round(((px - mL) / plotW) * (n - 1)))
+      }}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="scoreFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.30" />
+            <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {/* Y gridlines + labels */}
+        {yTicks.map(t => {
+          const gy = Y(t)
+          return (
+            <g key={t}>
+              <line x1={mL} y1={gy} x2={W - mR} y2={gy} stroke="#16202e" strokeWidth="1" />
+              <text x={mL - 6} y={gy + 3} textAnchor="end" fontSize="9" fill="#475569" fontFamily="monospace">{t.toFixed(2)}</text>
+            </g>
+          )
+        })}
+        {/* normal-boundary reference */}
+        <line x1={mL} y1={Y(0.5)} x2={W - mR} y2={Y(0.5)} stroke="#64748b" strokeWidth="1" strokeDasharray="4 4" opacity="0.45" />
+        <text x={W - mR} y={Y(0.5) - 3} textAnchor="end" fontSize="8.5" fill="#64748b" fontFamily="monospace">normal ~0.5</text>
+        {/* anomaly bands */}
+        {history.map((d, i) => d.anomaly
+          ? <line key={'b' + i} x1={X(i)} y1={mT} x2={X(i)} y2={mT + plotH} stroke="#ef4444" strokeWidth={plotW / n + 0.5} opacity="0.12" />
+          : null)}
+        {/* area + line */}
+        <path d={areaPath} fill="url(#scoreFill)" />
+        <path d={linePath} fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        {/* anomaly dots */}
+        {history.map((d, i) => d.anomaly
+          ? <circle key={'d' + i} cx={X(i)} cy={Y(vals[i])} r="3" fill="#ef4444" stroke="#0b0f17" strokeWidth="1" />
+          : null)}
+        {/* X time labels */}
+        {[0, Math.floor((n - 1) / 2), n - 1].map(i => (
+          <text key={'x' + i} x={X(i)} y={H - 5} textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'} fontSize="9" fill="#475569" fontFamily="monospace">
+            {i === n - 1 ? 'now' : `-${ago(history[i].ts)}s`}
+          </text>
+        ))}
+        {/* hover crosshair */}
+        {hv != null && (
+          <g>
+            <line x1={X(hv)} y1={mT} x2={X(hv)} y2={mT + plotH} stroke="#94a3b8" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+            <circle cx={X(hv)} cy={Y(vals[hv])} r="3.5" fill="#38bdf8" stroke="#0b0f17" strokeWidth="1.5" />
+          </g>
+        )}
+      </svg>
+      {/* readout badge */}
+      <div className="absolute top-0 right-2 text-right pointer-events-none">
+        <div className="text-[9px] text-slate-500 font-mono uppercase tracking-wider">{hv != null ? 'cursor' : 'current'}</div>
+        <div className={clsx('text-base font-mono font-semibold leading-tight',
+          (hv != null ? history[hv].anomaly : history[n - 1].anomaly) ? 'text-red-400' : 'text-sky-300')}>
+          {(hv != null ? vals[hv] : cur).toFixed(3)}
+        </div>
+        <div className="text-[9px] text-slate-500 font-mono">
+          {hv != null
+            ? `${history[hv].anomaly ? 'anomaly' : 'normal'} · -${ago(history[hv].ts)}s`
+            : `${anomalies} anomaly window${anomalies === 1 ? '' : 's'}`}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -508,23 +543,21 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
         {/* Row 1b — Score history + model health */}
         <div className="grid grid-cols-12 gap-3">
 
-          {/* Sparkline */}
+          {/* Detection-activity chart */}
           <div className="col-span-8 card flex flex-col">
-            <div className="card-header">
-              <BarChart3 size={11} />Score History
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
+                <BarChart3 size={13} className="text-slate-400" />Detection Activity
+              </div>
+              <span className="text-[10px] text-slate-600">IsolationForest anomaly score · trailing window</span>
             </div>
-            <div className="flex-1 min-h-[70px] overflow-hidden">
+            <div className="flex-1">
               <Sparkline history={history} />
             </div>
-            <div className="flex items-center gap-4 mt-1.5 pt-1.5 border-t border-slate-800/60 text-[8.5px] font-mono text-slate-600">
-              <span className="flex items-center gap-1">
-                <span className="inline-block w-3 h-[2px] bg-blue-500 rounded" />
-                IF activity (live)
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
-                anomaly window
-              </span>
+            <div className="flex items-center gap-4 mt-1 pt-1.5 border-t border-slate-800/60 text-[9px] font-mono text-slate-500">
+              <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-[2px] bg-sky-400 rounded" />anomaly score</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-px bg-slate-500" style={{ borderTop: '1px dashed #64748b' }} />normal boundary</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-red-500" />anomaly window</span>
             </div>
           </div>
 
