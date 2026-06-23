@@ -1,6 +1,6 @@
 import { useState, Fragment } from 'react'
 import type { PrometheusMetrics } from '../types'
-import { AlertTriangle, BookOpen, Clock, BarChart3, X, Shield, Activity, RefreshCw, Check, Target, ChevronDown, ChevronRight, Crosshair } from 'lucide-react'
+import { AlertTriangle, BookOpen, X, Shield, Activity, RefreshCw, Check, Target, ChevronDown, ChevronRight, Crosshair, ExternalLink } from 'lucide-react'
 import { clsx } from 'clsx'
 import { usePendingApprovals, useIncidents, approveIncidentStep, PendingApproval, IncidentRecord } from '../hooks/useMetrics'
 
@@ -95,6 +95,17 @@ function incidentCase(inc: IncidentRecord) {
   }
 }
 
+function IrTile({ label, value, tone, sub }: { label: string; value: string | number; tone: 'ok' | 'warn' | 'bad' | 'neutral'; sub?: string }) {
+  const t = tone === 'ok' ? 'text-emerald-400' : tone === 'warn' ? 'text-amber-400' : tone === 'bad' ? 'text-red-400' : 'text-slate-100'
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3">
+      <div className="text-[10px] uppercase tracking-wider text-slate-500">{label}</div>
+      <div className={clsx('text-2xl font-semibold mt-1 tabular-nums', t)}>{value}</div>
+      {sub && <div className="text-[10px] text-slate-600 mt-0.5">{sub}</div>}
+    </div>
+  )
+}
+
 export function IncidentPage({ metrics }: Props) {
   const pending = usePendingApprovals(2000)
   const incidents = useIncidents(2000)
@@ -103,7 +114,6 @@ export function IncidentPage({ metrics }: Props) {
     ? incidents.filter(i => !i.closed && !(i as any).postmortem_committed).length
     : Math.round(metrics?.open_incidents ?? 0)
   const injActive = (metrics?.injection_active ?? 0) > 0
-  const injTotal = Math.round(metrics?.attack_injections_total ?? 0)
   const [loadingKey, setLoadingKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [execResults, setExecResults] = useState<Record<string, { ok: boolean; msg: string; stdout?: string }>>({})
@@ -146,73 +156,60 @@ export function IncidentPage({ metrics }: Props) {
     }
   }
 
+  const lat = metrics?.detection_latency ?? -1
+  const verdict = metrics?.pipeline_verdict ?? 'NONE'
+
   return (
-    <div className="h-full overflow-y-auto p-5 space-y-5">
-      <div className="flex items-center gap-2">
-        <AlertTriangle size={16} className="text-ot-red" />
-        <h1 className="text-lg font-bold text-white">IR Console</h1>
-        <span className="text-xs text-slate-500 font-mono">Incident Response & Recovery — NIST SP 800-61r2</span>
-        {injActive && <span className="ml-auto badge badge-critical animate-pulse">⚡ ACTIVE ATTACK</span>}
-      </div>
+    <div className="h-full overflow-y-auto" style={{ background: '#070b11' }}>
+      <div className="p-6 space-y-5 max-w-[1500px] mx-auto">
 
-      {/* Error Banner */}
-      {error && (
-        <div className="bg-ot-red/20 border border-ot-red text-ot-red px-4 py-2.5 rounded text-xs font-mono flex items-center justify-between">
-          <span><strong>Error:</strong> {error}</span>
-          <button onClick={() => setError(null)} className="text-white hover:text-slate-300"><X size={14} /></button>
-        </div>
-      )}
-
-      {/* Status row */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className={clsx('card', openInc > 0 ? 'border-ot-red border-glow-red' : 'border-safe-green/30')}>
-          <div className="card-header"><AlertTriangle size={12} />Open Incidents</div>
-          <div className={clsx('stat-value mt-2', openInc > 0 ? 'text-ot-red' : 'text-safe-green')}>
-            {openInc}
+        {/* Header */}
+        <div className="flex items-center gap-2.5">
+          <AlertTriangle size={18} className="text-slate-300" />
+          <div className="flex-1">
+            <h1 className="text-lg font-semibold text-white tracking-tight">Incident Response</h1>
+            <p className="text-[11px] text-slate-500">
+              Detect → classify → contain → recover. NIST SP 800-61r2 · MITRE ATT&amp;CK for ICS · graded auto/human containment.
+            </p>
           </div>
-          <div className="text-[10px] text-slate-500 mt-1 font-mono">From Playbook Engine Log</div>
+          {injActive && (
+            <span className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border border-red-700 bg-red-950/40 text-red-300">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />Active attack
+            </span>
+          )}
         </div>
 
-        <div className="card">
-          <div className="card-header"><BarChart3 size={12} />Attack Injections</div>
-          <div className="stat-value mt-2 text-ai-amber">{injTotal}</div>
-          <div className="text-[10px] text-slate-500 mt-1 font-mono">Total demo injections run</div>
-        </div>
-
-        <div className="card">
-          <div className="card-header"><Clock size={12} />Detection Latency</div>
-          <div className={clsx('stat-value mt-2', (metrics?.detection_latency ?? -1) > 5 ? 'text-ai-amber' : 'text-safe-green')}>
-            {(metrics?.detection_latency ?? -1) > 0 ? `${metrics!.detection_latency.toFixed(2)}s` : '—'}
+        {/* Error banner */}
+        {error && (
+          <div className="bg-red-950/40 border border-red-800 text-red-300 px-4 py-2.5 rounded-lg text-xs flex items-center justify-between">
+            <span><strong>Error:</strong> {error}</span>
+            <button onClick={() => setError(null)} className="text-slate-300 hover:text-white"><X size={14} /></button>
           </div>
-          <div className="text-[10px] text-slate-500 mt-1 font-mono">Injection → first AI alert</div>
+        )}
+
+        {/* KPI tiles */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <IrTile label="Open incidents" value={openInc} tone={openInc > 0 ? 'bad' : 'ok'} sub="Active IR cases" />
+          <IrTile label="Awaiting approval" value={pending.length} tone={pending.length > 0 ? 'warn' : 'ok'} sub="Containment actions queued" />
+          <IrTile label="Detection latency" value={lat > 0 ? `${lat.toFixed(2)}s` : '—'} tone={lat > 5 ? 'warn' : lat > 0 ? 'ok' : 'neutral'} sub="Injection → first alert" />
+          <IrTile label="CI/CD pipeline" value={verdict} tone={verdict === 'PASSED' ? 'ok' : verdict === 'FAILED' ? 'bad' : 'neutral'} sub="DevSecOps gate" />
         </div>
 
-        <div className="card">
-          <div className="card-header">Pipeline Verdict</div>
-          <div className={clsx('font-mono text-lg font-bold mt-2',
-            metrics?.pipeline_verdict === 'PASSED' ? 'text-safe-green' :
-            metrics?.pipeline_verdict === 'FAILED' ? 'text-ot-red' : 'text-slate-500'
-          )}>
-            {metrics?.pipeline_verdict ?? 'NONE'}
+      {/* Approvals queue */}
+      <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
+            <Shield size={14} className="text-amber-400" />
+            Containment Approvals
           </div>
-          <div className="text-[10px] text-slate-500 mt-1 font-mono">DevSecOps CI/CD pipeline</div>
+          {pending.length > 0 && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-700 bg-amber-950/40 text-amber-300">
+              {pending.length} awaiting verification
+            </span>
+          )}
         </div>
-      </div>
-
-      {/* Incident Response Control Panel (Approvals) */}
-      <div className="card border-glow-amber border-ai-amber/40">
-        <div className="flex items-center justify-between mb-2">
-          <div className="card-header font-bold text-ai-amber flex items-center gap-1.5">
-            <Shield size={14} className="animate-pulse text-ai-amber" />
-            Incident Response Control Panel
-          </div>
-          <span className="text-[10px] font-mono bg-ai-amber/10 text-ai-amber px-2 py-0.5 rounded border border-ai-amber/30">
-            Awaiting Operator Verification
-          </span>
-        </div>
-        <p className="text-[11px] text-slate-400 mb-3">
-          The Stage 6 Incident Response engine enforces human approval for safety-critical mitigation tiers.
-          Review the queued containment actions below and confirm execution to safeguard plant operations.
+        <p className="text-[11px] text-slate-500 mb-3">
+          Safety-critical mitigation tiers require analyst approval before execution. Review and authorise each queued action.
         </p>
 
         {pending.length === 0 ? (
@@ -247,10 +244,7 @@ export function IncidentPage({ metrics }: Props) {
                         <button
                           disabled={isLoading}
                           onClick={() => handleApproveReject(entry.incident_id, entry.step, false)}
-                          className={clsx(
-                            "px-2.5 py-1 rounded text-[11px] font-bold text-white flex items-center gap-1",
-                            "bg-safe-green hover:bg-green-700 active:scale-95 transition-all disabled:opacity-50"
-                          )}
+                          className="px-2.5 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 border border-emerald-700 text-emerald-300 hover:bg-emerald-950/40 transition-colors disabled:opacity-50"
                         >
                           {isLoading ? <RefreshCw size={11} className="animate-spin" /> : <Check size={11} />}
                           Approve
@@ -258,10 +252,7 @@ export function IncidentPage({ metrics }: Props) {
                         <button
                           disabled={isLoading}
                           onClick={() => handleApproveReject(entry.incident_id, entry.step, true)}
-                          className={clsx(
-                            "px-2.5 py-1 rounded text-[11px] font-bold text-white flex items-center gap-1",
-                            "bg-ot-red hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50"
-                          )}
+                          className="px-2.5 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 border border-red-800 text-red-300 hover:bg-red-950/40 transition-colors disabled:opacity-50"
                         >
                           {isLoading ? <RefreshCw size={11} className="animate-spin" /> : <X size={11} />}
                           Reject
@@ -297,10 +288,10 @@ export function IncidentPage({ metrics }: Props) {
         )}
       </div>
 
-      {/* Incident Logs and Auditing History */}
-      <div className="card">
-        <div className="card-header mb-3 flex items-center gap-1.5 text-white font-semibold">
-          <Activity size={14} className="text-dmz-teal" />
+      {/* Incidents */}
+      <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+        <div className="mb-3 flex items-center gap-1.5 text-sm text-slate-200 font-medium">
+          <Activity size={14} className="text-slate-400" />
           {showHistory ? 'All Incidents (History)' : 'Active Incidents'}
           <span className="ml-1 text-[10px] font-mono text-slate-600 normal-case">
             ({showHistory ? incidents.length : openInc} shown)
@@ -458,17 +449,17 @@ export function IncidentPage({ metrics }: Props) {
       </div>
 
       {/* Per-attack response playbooks (MITRE ATT&CK for ICS) */}
-      <div>
+      <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
         <div className="flex items-center gap-2 mb-3">
-          <BookOpen size={14} className="text-ai-amber" />
-          <span className="text-sm font-semibold text-white">Response Playbooks — one per attack technique</span>
-          <span className="text-[10px] font-mono text-slate-600 normal-case">MITRE ATT&amp;CK for ICS · graded auto/human containment</span>
+          <BookOpen size={14} className="text-slate-400" />
+          <span className="text-sm font-medium text-slate-200">Response Playbooks — one per attack technique</span>
+          <span className="text-[10px] text-slate-600">MITRE ATT&amp;CK for ICS · graded auto/human containment</span>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {PLAYBOOK_CATALOG.map(pb => (
-            <div key={pb.id} className={clsx('card', pb.severity === 'CRITICAL' ? 'border-red-900/60' : pb.severity === 'HIGH' ? 'border-amber-900/40' : 'border-border-dim')}>
+            <div key={pb.id} className="rounded-md border border-slate-800 bg-slate-950/40 p-3">
               <div className="flex items-start gap-2 mb-2">
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-ot-red/15 text-ot-red border border-ot-red/30 flex-shrink-0 mt-0.5">{pb.mitre}</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-800/70 text-slate-300 border border-slate-700 flex-shrink-0 mt-0.5">{pb.mitre}</span>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-bold text-white">{pb.title}</span>
@@ -496,9 +487,9 @@ export function IncidentPage({ metrics }: Props) {
       </div>
 
       {/* Forensic sources */}
-      <div className="card">
-        <div className="card-header"><BookOpen size={12} />Forensic Evidence Sources</div>
-        <table className="w-full text-xs font-mono mt-2">
+      <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-2.5">Forensic Evidence Sources</div>
+        <table className="w-full text-xs font-mono">
           <thead>
             <tr className="border-b border-border-dim text-slate-500 text-left">
               <th className="pb-2 pr-4">Source</th>
@@ -522,22 +513,21 @@ export function IncidentPage({ metrics }: Props) {
         </table>
       </div>
 
-      {/* Links */}
-      <div className="card">
-        <div className="card-header">Monitoring & Observability</div>
-        <div className="flex flex-wrap gap-3">
-          <a href="http://localhost:3003" target="_blank" rel="noopener noreferrer" className="btn-primary text-sm">
-            Grafana Dashboards ↗
-          </a>
-          <a href="http://localhost:9090" target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">
-            Prometheus ↗
-          </a>
-          <a href="http://localhost:3001" target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">
-            ntopng ↗
-          </a>
-          <a href="http://localhost:3000" target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">
-            Gitea CI/CD ↗
-          </a>
+        {/* Links */}
+        <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+          <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-2.5">Monitoring &amp; Observability</div>
+          <div className="flex flex-wrap gap-2.5">
+            {[
+              { href: 'http://localhost:3003', label: 'Grafana SOC dashboards' },
+              { href: 'http://localhost:9090', label: 'Prometheus' },
+              { href: 'http://localhost:3000', label: 'Gitea CI/CD' },
+            ].map(l => (
+              <a key={l.href} href={l.href} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors">
+                {l.label} <ExternalLink size={12} />
+              </a>
+            ))}
+          </div>
         </div>
       </div>
     </div>
