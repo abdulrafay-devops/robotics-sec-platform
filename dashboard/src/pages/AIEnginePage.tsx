@@ -488,15 +488,11 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
             <div className="flex items-center gap-4 mt-1.5 pt-1.5 border-t border-slate-800/60 text-[8.5px] font-mono text-slate-600">
               <span className="flex items-center gap-1">
                 <span className="inline-block w-3 h-[2px] bg-blue-500 rounded" />
-                IF score
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="inline-block w-3 h-[1px] bg-amber-500" style={{ borderTop: '1px dashed #f59e0b' }} />
-                threshold 0.15
+                IF activity (live)
               </span>
               <span className="flex items-center gap-1">
                 <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
-                anomaly
+                anomaly window
               </span>
             </div>
           </div>

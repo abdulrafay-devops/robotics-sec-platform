@@ -125,8 +125,43 @@ def _resolve_if_threshold(meta: Optional[dict]) -> float:
 
 _tf_lock = threading.Lock()
 
-# Last 60 scored samples (ts, iforest_score, pca_z, anomaly)
+# Last 60 scored samples (ts, score, pca_z, anomaly). `score` is the live IF
+# "activity" (lively positive) so the sparkline/trend reflect the real baseline.
 _score_history: Deque[Tuple[float, Optional[float], Optional[float], bool]] = deque(maxlen=60)
+_last_hist_ts = 0.0
+
+
+def _live_history_poller() -> None:
+    """Continuously feed _score_history from the live data plane so the trend +
+    sparkline are ACCURATE on a calm baseline (not frozen on the last injection).
+
+    Previously _score_history was only appended during injections, so between
+    attacks /api/trend reported a stale 'anomaly_rate 100% / RISING' while the
+    plant was actually calm. This reads feature_consumer's live state every ~2.5s
+    and appends the real score + anomaly flag (deduped by timestamp)."""
+    global _last_hist_ts
+    while True:
+        try:
+            d = None
+            for p in ("/var/lab/state/live_activity.json", "/var/lab/state/latest_scores.json"):
+                try:
+                    with open(p, "r", encoding="utf-8") as fh:
+                        d = json.load(fh)
+                    break
+                except (OSError, ValueError):
+                    continue
+            if d:
+                ts = float(d.get("ts", 0.0))
+                if ts and ts != _last_hist_ts:
+                    _last_hist_ts = ts
+                    # Plot the lively positive IF activity; fall back to the score.
+                    val = d.get("if_activity")
+                    if val is None:
+                        val = d.get("iforest_score")
+                    _score_history.append((ts, val, d.get("pca_z"), bool(d.get("anomaly", False))))
+        except Exception as exc:  # never let the poller crash the service
+            LOG.debug("live history poller error: %s", exc)
+        time.sleep(2.5)
 
 
 def _try_load() -> None:
@@ -177,6 +212,9 @@ def _try_load() -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     _try_load()
+    # Feed the trend/sparkline from the live data plane so they stay accurate on
+    # a calm baseline instead of freezing on the last injection.
+    threading.Thread(target=_live_history_poller, daemon=True).start()
     yield
 
 app = FastAPI(title="lab-ai-score", version=FEATURE_VERSION, lifespan=_lifespan)
@@ -1156,15 +1194,14 @@ def _run_injection(attack_type: str, duration_s: float, rate_hz: float) -> None:
         # synthetic feature rows here — those bypassed the classifier and produced
         # mislabeled "192.168.20.99" alerts. This loop only drives the live
         # sparkline / threat gauge for the duration (display-only, DEMO_MODE-gated).
-        feat_override = _ATTACK_FEATURE_OVERRIDES.get(
-            attack_type, _ATTACK_FEATURE_OVERRIDES["modbus_command_injection"])
+        # Keep the injection 'active' for the duration. The live-history poller +
+        # the real attack traffic drive the sparkline/trend now, so we no longer
+        # push synthetic score points here (they'd interleave inconsistent values).
         elapsed = 0.0
-        tick = 2.0
+        tick = 1.0
         while elapsed < duration_s and not _should_injection_stop():
-            _push_synthetic_score(feat_override, attack_type)
             time.sleep(tick)
             elapsed += tick
-        _push_synthetic_score(feat_override, attack_type)
         LOG.warning("DEMO ATTACK INJECTION COMPLETE (real attack ran on SEC): type=%s", attack_type)
 
     except Exception as exc:
