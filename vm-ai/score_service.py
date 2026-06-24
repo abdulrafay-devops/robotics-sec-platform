@@ -975,6 +975,16 @@ def get_stages_reports() -> dict:
         except Exception as exc:
             LOG.error("Failed to read inventory.json: %s", exc)
 
+    # 4b. Scan metadata (provenance of the live vuln scan)
+    scan_meta = None
+    scan_meta_path = "/var/lab/state/scan_meta.json"
+    if os.path.exists(scan_meta_path):
+        try:
+            with open(scan_meta_path, "r", encoding="utf-8") as fh:
+                scan_meta = json.load(fh)
+        except Exception as exc:
+            LOG.error("Failed to read scan_meta.json: %s", exc)
+
     # 5. Pipeline Verdict
     pipeline_data = None
     artifacts_dir = Path("/var/lab/artifacts")
@@ -994,6 +1004,7 @@ def get_stages_reports() -> dict:
         "baseline_drift": drift_data,
         "integrity_baseline": integrity_data,
         "inventory": inventory_data,
+        "scan_meta": scan_meta,
         "pipeline_verdict": pipeline_data
     }
 

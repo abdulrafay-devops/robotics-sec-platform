@@ -4,7 +4,7 @@ import {
   Network, Brain, Shield, Search, GitBranch, AlertOctagon,
   CheckCircle2, XCircle, ChevronRight, Activity,
   Lock, Server, Cpu, ExternalLink,
-  ShieldAlert, RefreshCw, Hash,
+  ShieldAlert, RefreshCw, Hash, Radar,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
@@ -332,6 +332,18 @@ function Stage1Detail({ reports, metrics }: { reports: any; metrics: PrometheusM
         { label: 'OT Isolation', value: 'lab-ot-net (internal: true)' },
       ]} />
 
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+          Network Traffic Analysis
+        </span>
+        <a href="http://localhost:3001" target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-1.5 text-[10px] font-mono text-cyan-300 hover:text-cyan-200 border border-cyan-900/50 hover:border-cyan-700 bg-cyan-950/20 rounded px-2.5 py-1.5">
+          <Activity size={12} /> Open ntopng traffic analyzer <ExternalLink size={10} />
+        </a>
+      </div>
+
+      <ScanMetaStrip meta={reports?.scan_meta} />
+
       <div>
         <SectionTitle icon={Server} text="OT Asset Inventory" count={inv.length} />
         {inv.length === 0 ? (
@@ -503,6 +515,37 @@ function Stage3Detail({ reports, metrics }: { reports: any; metrics: PrometheusM
   )
 }
 
+function relTime(ts?: number): string {
+  if (!ts) return '—'
+  const s = Math.max(0, Math.floor(Date.now() / 1000 - ts))
+  if (s < 60) return `${s}s ago`
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86400)}d ago`
+}
+
+function ScanMetaStrip({ meta }: { meta: any }) {
+  if (!meta) return null
+  const ports = (meta.open_ports ?? []) as number[]
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-emerald-900/40 bg-emerald-950/10 px-3 py-2 text-[10px] font-mono">
+      <span className="flex items-center gap-1.5 text-emerald-300 font-bold">
+        <Radar size={12} className="text-emerald-400" /> Live scan
+      </span>
+      <span className="text-slate-500">last run <span className="text-slate-200">{relTime(meta.last_scan_ts)}</span></span>
+      <span className="text-slate-500">{meta.hosts_found ?? 0} hosts · <span className="text-slate-200">{meta.subnet}</span></span>
+      <span className="text-slate-500 truncate max-w-[260px]">scanner <span className="text-slate-200">{meta.scanner}</span></span>
+      {ports.length > 0 && (
+        <span className="flex items-center gap-1 text-slate-500">open
+          {ports.slice(0, 8).map((p) => (
+            <span key={p} className="bg-slate-900 border border-slate-800 rounded px-1 text-[9px] text-cyan-300">{p}</span>
+          ))}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function Stage4Detail({ reports, metrics }: { reports: any; metrics: PrometheusMetrics | null }) {
   const vulns = reports?.vulnerabilities ?? []
   const drift = reports?.baseline_drift?.drift ?? []
@@ -514,6 +557,7 @@ function Stage4Detail({ reports, metrics }: { reports: any; metrics: PrometheusM
 
   return (
     <div className="space-y-4">
+      <ScanMetaStrip meta={reports?.scan_meta} />
       <DataGrid items={[
         { label: 'Critical CVEs', value: String(metrics?.vuln_by_severity?.critical ?? 0), accent: (metrics?.vuln_by_severity?.critical ?? 0) > 0 },
         { label: 'High CVEs', value: String(metrics?.vuln_by_severity?.high ?? 0) },

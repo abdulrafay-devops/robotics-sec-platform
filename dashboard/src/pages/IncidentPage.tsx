@@ -520,6 +520,7 @@ export function IncidentPage({ metrics }: Props) {
             {[
               { href: 'http://localhost:3003', label: 'Grafana SOC dashboards' },
               { href: 'http://localhost:9090', label: 'Prometheus' },
+              { href: 'http://localhost:3001', label: 'ntopng traffic analysis' },
               { href: 'http://localhost:3000', label: 'Gitea CI/CD' },
             ].map(l => (
               <a key={l.href} href={l.href} target="_blank" rel="noopener noreferrer"

@@ -83,18 +83,45 @@ def _firmware_lt(actual: str | None, threshold: str) -> bool:
     return a < t
 
 
-def _matches(asset: dict, cve: dict) -> bool:
+def _matches(component: dict, cve: dict) -> bool:
+    """Does this software component (vendor/product/firmware) match the CVE?"""
     pm = cve.get('product_match', {})
     if 'vendor_contains' in pm:
-        if pm['vendor_contains'].lower() not in (asset.get('vendor') or '').lower():
+        if pm['vendor_contains'].lower() not in (component.get('vendor') or '').lower():
             return False
     if 'product_contains' in pm:
-        if pm['product_contains'].lower() not in (asset.get('product') or '').lower():
+        if pm['product_contains'].lower() not in (component.get('product') or '').lower():
             return False
     if 'firmware_lt' in pm:
-        if not _firmware_lt(asset.get('firmware'), pm['firmware_lt']):
+        if not _firmware_lt(component.get('firmware'), pm['firmware_lt']):
             return False
     return True
+
+
+def _components(asset: dict) -> list[dict]:
+    """Every (vendor, product, firmware) tuple this asset exposes.
+
+    A host runs more than one piece of software, so we correlate CVEs
+    against each installed component from the asset register (the
+    `software` list) as well as the host-level identity. Each component is
+    normalised to the vendor/product/firmware shape `_matches` expects.
+    """
+    comps: list[dict] = []
+    # Host-level identity (from Modbus device-id probe or register).
+    if asset.get('vendor') or asset.get('product') or asset.get('firmware'):
+        comps.append({
+            'vendor': asset.get('vendor'),
+            'product': asset.get('product'),
+            'firmware': asset.get('firmware'),
+        })
+    # Installed software inventory.
+    for sw in asset.get('software') or []:
+        comps.append({
+            'vendor': sw.get('vendor'),
+            'product': sw.get('product'),
+            'firmware': sw.get('version'),
+        })
+    return comps
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -115,21 +142,27 @@ def main(argv: list[str] | None = None) -> int:
 
     findings: list[dict] = []
     for asset in assets:
-        for cve in cves:
-            if not _matches(asset, cve):
-                continue
-            findings.append({
-                'asset_ip': asset['ip'],
-                'asset_vendor': asset.get('vendor'),
-                'asset_product': asset.get('product'),
-                'asset_firmware': asset.get('firmware'),
-                'cve_id': cve['id'],
-                'cvss': float(cve['cvss']),
-                'title': cve['title'],
-                'source': cve['source'],
-                'url': cve['url'],
-                'remediation': cve['remediation'],
-            })
+        seen: set[tuple[str, str]] = set()  # (asset_ip, cve_id) dedupe
+        for component in _components(asset):
+            for cve in cves:
+                if not _matches(component, cve):
+                    continue
+                key = (asset['ip'], cve['id'])
+                if key in seen:
+                    continue
+                seen.add(key)
+                findings.append({
+                    'asset_ip': asset['ip'],
+                    'asset_vendor': component.get('vendor'),
+                    'asset_product': component.get('product'),
+                    'asset_firmware': component.get('firmware'),
+                    'cve_id': cve['id'],
+                    'cvss': float(cve['cvss']),
+                    'title': cve['title'],
+                    'source': cve['source'],
+                    'url': cve['url'],
+                    'remediation': cve['remediation'],
+                })
 
     # Sort findings: highest CVSS first, then asset IP, then CVE id, so the
     # output is deterministic across runs (handy for diffing in audits).
