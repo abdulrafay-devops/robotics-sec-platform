@@ -447,40 +447,48 @@ def _stage3_sis_integrity() -> int:
 
 
 def _stage1_modbus_traffic_rate() -> float:
-    """Count Modbus-category alerts in ai-alerts.json from the last 60 s.
+    """Live Modbus/TCP request rate (req/s) observed by Zeek over the last 60 s.
 
-    Returns a rate (events / second) as a gauge for Stage 1 industrial
-    protocol security monitoring (OT/IT convergence, Objective 1).
+    This is the real on-wire industrial-protocol throughput for Stage 1
+    OT/IT-convergence monitoring (Objective 1) — the baseline HMI poll plus any
+    attack burst — NOT an alert count. We read only the TAIL of the (large,
+    continuously-growing) modbus_features.log and count *request* records whose
+    timestamp falls inside the last 60 s, so the scrape stays fast.
     """
-    if not AI_ALERTS.exists():
+    if not ZEEK_MODBUS.exists():
         return 0.0
     cutoff = dt.datetime.utcnow() - dt.timedelta(seconds=60)
+    try:
+        size = ZEEK_MODBUS.stat().st_size
+        with ZEEK_MODBUS.open('rb') as fh:
+            # 512 KiB of tail covers several minutes even at attack rates.
+            window = 512 * 1024
+            if size > window:
+                fh.seek(size - window)
+                fh.readline()  # discard the partial first line
+            data = fh.read().decode('utf-8', errors='replace')
+    except OSError:
+        return 0.0
     count = 0
-    with AI_ALERTS.open('r', errors='replace') as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            cat = (
-                rec.get('category') or
-                rec.get('alert_type') or
-                (rec.get('alert') or {}).get('category') or
-                ''
-            )
-            if 'modbus' not in str(cat).lower():
-                continue
-            ts_raw = rec.get('timestamp') or rec.get('ts')
-            if ts_raw:
-                try:
-                    ts = dt.datetime.fromisoformat(str(ts_raw).replace('Z', ''))
-                    if ts < cutoff:
-                        continue
-                except (ValueError, TypeError):
-                    pass
+    for line in data.splitlines():
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        # Count requests only so a request/response pair isn't double-counted.
+        if rec.get('is_request') is False:
+            continue
+        ts_raw = rec.get('ts')
+        if not ts_raw:
+            continue
+        try:
+            ts = dt.datetime.fromisoformat(str(ts_raw).replace('Z', ''))
+        except (ValueError, TypeError):
+            continue
+        if ts >= cutoff:
             count += 1
     return round(count / 60.0, 4)
 
