@@ -158,6 +158,8 @@ class _Scorer:
         self.scaler   = self._maybe(joblib.load,     os.path.join(models_dir, "scaler.pkl"))
         self.pca_thr  = self._maybe(self._load_json, os.path.join(models_dir, "pca_threshold.json"))
         self.meta     = self._maybe(self._load_json, os.path.join(models_dir, "model_meta.json"))
+        # Decision-fusion meta-scorer (logistic stacker) — the final decision maker.
+        self.fusion   = self._maybe(joblib.load,     os.path.join(models_dir, "meta_model.pkl"))
         self.if_threshold = self._resolve_if_threshold()
         self.tf_model = None
         self.tf_thr   = None
@@ -253,19 +255,39 @@ class _Scorer:
                 LOG.debug("TF scoring error: %s", exc)
 
         # ── Anomaly decision ───────────────────────────────────────────────
-        # Which models fired?
+        # The hand-written rule is kept as a FALLBACK; the learned decision-fusion
+        # meta-scorer below is the primary decision maker when its model is present.
         if_fired  = if_score is not None and if_score > self.if_threshold
         pca_fired = (pca_z is not None and self.pca_thr is not None
                      and pca_z >= self.pca_thr.get("z_alert_threshold", 3.0))
         tf_fired  = (tf_z is not None and self.tf_thr is not None
                      and tf_z >= self.tf_thr.get("z_alert_threshold", 3.0))
-        # Trust the calibrated IsolationForest alone; otherwise require BOTH
-        # autoencoders to agree (consensus) so a single noisy AE z-score cannot
-        # raise an alert by itself. See REQUIRE_AE_CONSENSUS note above.
         if REQUIRE_AE_CONSENSUS:
-            anomaly = if_fired or (pca_fired and tf_fired)
+            rule_anomaly = if_fired or (pca_fired and tf_fired)
         else:
-            anomaly = if_fired or pca_fired or tf_fired
+            rule_anomaly = if_fired or pca_fired or tf_fired
+
+        # ── Decision-fusion meta-scorer (the final decision maker) ─────────
+        # A learned logistic "stacker" fuses the three detector scores into ONE
+        # calibrated attack probability -> risk score (0-100) + severity. Inputs are
+        # the raw model scores (log1p on the AE z-scores, matching model/train_meta.py).
+        # If the meta-model is absent it transparently falls back to the rule above.
+        risk_score = None
+        attack_prob = None
+        severity = None
+        anomaly = rule_anomaly
+        if (self.fusion is not None and if_score is not None
+                and pca_z is not None and tf_z is not None):
+            try:
+                feats = np.array([[if_score, np.log1p(max(0.0, pca_z)), np.log1p(max(0.0, tf_z))]])
+                p = float(self.fusion["clf"].predict_proba(feats)[0, 1])
+                attack_prob = round(p, 4)
+                risk_score = round(p * 100.0, 1)
+                anomaly = p >= self.fusion["threshold"]
+                severity = ("critical" if p >= 0.97 else "high" if p >= 0.80
+                            else "medium" if anomaly else "low")
+            except Exception as exc:  # the meta-scorer must never break detection
+                LOG.debug("meta-scorer failed, using rule: %s", exc)
 
         idx = np.argsort(-np.abs(xs.ravel()))[:3]
         top = [FEATURE_NAMES[i] for i in idx]
@@ -282,6 +304,9 @@ class _Scorer:
             "if_activity":   if_activity,
             "pca_activity":  pca_activity,
             "tf_activity":   tf_activity,
+            "risk_score":    risk_score,
+            "attack_prob":   attack_prob,
+            "severity":      severity,
             "anomaly":       anomaly,
             "top_features":  top,
             "model_version": FEATURE_VERSION,
@@ -365,6 +390,9 @@ def main() -> int:
                         "iforest_score": s.get("iforest_score"),
                         "pca_z": s.get("pca_z"),
                         "tf_z": s.get("tf_z"),
+                        "risk_score": s.get("risk_score"),
+                        "attack_prob": s.get("attack_prob"),
+                        "severity": s.get("severity"),
                         "anomaly": bool(s.get("anomaly", False)),
                         "n_msgs": len(_recent),
                     }))
@@ -411,6 +439,9 @@ def main() -> int:
                             "iforest_score": _if_s,
                             "pca_z":         _pca_s,
                             "tf_z":          _tf_s,
+                            "risk_score":    event.get("risk_score"),
+                            "attack_prob":   event.get("attack_prob"),
+                            "severity":      event.get("severity"),
                             "src_ip":        bucket.src_ip,
                             "anomaly":       bool(event.get("anomaly", False)),
                         }))

@@ -163,6 +163,19 @@ if [ ! -f /opt/lab/models/autoencoder.h5 ] || \
     echo "Model training complete."
 fi
 
+# Train the decision-fusion meta-scorer (the final decision maker) on boot if missing.
+# It stacks the three Modbus detectors into one calibrated risk score + writes the
+# Model-Performance report. Depends on the base models above; fast (no new training,
+# just scores the labelled set + fits a logistic regression).
+if [ -f /opt/lab/models/iforest.pkl ] && [ ! -f /opt/lab/models/meta_model.pkl ]; then
+    echo "Training decision-fusion meta-scorer..."
+    set +e
+    cd /opt/lab/vm-ai
+    /opt/lab/venv-ai/bin/python -m model.train_meta
+    echo "  meta-scorer exit code: $?"
+    set -e
+fi
+
 # Train the robot-behavior LSTM autoencoder on boot if missing (independent of the
 # Modbus models above). Synthetic, seeded, reproducible; a few minutes on CPU.
 if [ ! -f /opt/lab/models/robot_lstm.h5 ]; then

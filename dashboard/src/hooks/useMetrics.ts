@@ -23,6 +23,40 @@ export interface LiveScores {
   if_activity: number | null
   pca_activity: number | null
   tf_activity: number | null
+  risk_score: number | null
+  attack_prob: number | null
+  severity: string | null
+}
+
+export interface ModelPerformance {
+  generated_at?: string
+  model?: string
+  normal_source?: string
+  n_normal?: number
+  n_attack?: number
+  roc_auc?: number
+  precision?: number
+  recall?: number
+  false_positive_rate?: number
+  operating_threshold?: number
+  confusion?: { tp: number; fp: number; tn: number; fn: number }
+  fusion_weights?: { iforest: number; pca_ae: number; tf_ae: number }
+  per_attack_recall?: Record<string, number>
+}
+
+export function useModelPerformance(intervalMs = 30000) {
+  const [perf, setPerf] = useState<ModelPerformance | null>(null)
+  useEffect(() => {
+    let active = true
+    const poll = async () => {
+      const d = await safeFetch<ModelPerformance>(`${API_BASE}/model/performance`)
+      if (active && d) setPerf(d)
+    }
+    poll()
+    const t = setInterval(poll, intervalMs)
+    return () => { active = false; clearInterval(t) }
+  }, [intervalMs])
+  return perf
 }
 
 // Fast live AI scores straight from the data-plane state files (no Prometheus hop).

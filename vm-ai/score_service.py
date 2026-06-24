@@ -486,6 +486,7 @@ def api_scores_live() -> dict:
         "ts": 0.0, "anomaly": False,
         "iforest_score": 0.0, "pca_z": 0.0, "tf_z": 0.0,
         "if_activity": None, "pca_activity": None, "tf_activity": None,
+        "risk_score": None, "attack_prob": None, "severity": None,
     }
     for path in ("/var/lab/state/latest_scores.json", "/var/lab/state/live_activity.json"):
         try:
@@ -497,6 +498,19 @@ def api_scores_live() -> dict:
         except (OSError, ValueError):
             pass
     return out
+
+
+@app.get("/api/model/performance")
+def api_model_performance() -> dict:
+    """The offline Model-Performance report (ROC-AUC, precision/recall, FPR,
+    per-attack recall, learned fusion weights) written by model/train_meta.py."""
+    for path in ("/var/lab/state/model_performance.json", "/opt/lab/models/model_performance.json"):
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                return json.load(fh)
+        except (OSError, ValueError):
+            continue
+    return {}
 
 
 @app.get("/api/trend/history")

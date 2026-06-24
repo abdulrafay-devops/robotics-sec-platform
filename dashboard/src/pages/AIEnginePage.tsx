@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
-  triggerInjection, useInjectionState, useScrollingAlerts, useLiveScores,
+  triggerInjection, useInjectionState, useScrollingAlerts, useLiveScores, useModelPerformance,
   useTrend, useTrendHistory, useModelHealth,
 } from '../hooks/useMetrics'
 
@@ -353,6 +353,10 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
   // while the threat level + status words keep using the floored DETECTION scores
   // (0 = no anomaly) so "calm baseline = NOMINAL" stays correct.
   const live = useLiveScores(1000)
+  const perf = useModelPerformance(30000)
+  // Decision-fusion meta-scorer output (the final risk decision).
+  const risk = live?.risk_score ?? null
+  const sev = live?.severity ?? null
   // Detection scores (authoritative for status/threat). Fall back to Prometheus.
   const iForest  = live?.iforest_score ?? metrics?.iforest_score ?? -1
   const pcaZ     = live?.pca_z ?? metrics?.pca_z ?? -1
@@ -396,6 +400,18 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
     try {
       const res = await triggerInjection(attackType, duration, rate)
       setLastResult({ ok: res.status === 'ok', msg: res.message ?? JSON.stringify(res) })
+    } catch (e) { setLastResult({ ok: false, msg: String(e) }) }
+    setInjecting(false)
+  }
+
+  // One-click guided demo: fires a representative, clearly-classified attack so the
+  // whole chain (risk score -> anomaly -> classified incident) lights up live.
+  async function runGuidedDemo() {
+    setInjecting(true); setLastResult(null)
+    setAttackType('modbus_command_injection'); setDuration(18); setRate(10)
+    try {
+      const res = await triggerInjection('modbus_command_injection', 18, 10)
+      setLastResult({ ok: res.status === 'ok', msg: 'Guided demo running — watch the AI Risk Score spike, then check the IR Console for the classified incident.' })
     } catch (e) { setLastResult({ ok: false, msg: String(e) }) }
     setInjecting(false)
   }
@@ -461,6 +477,40 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
       {/* ── Body ────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-[1500px] mx-auto p-6 space-y-4">
+
+        {/* Fused risk — decision-fusion meta-scorer (the final decision maker) */}
+        <div className={clsx('rounded-lg border bg-slate-900/40 px-5 py-4 flex items-center gap-6',
+          sev === 'critical' || sev === 'high' ? 'border-red-900/60' : sev === 'medium' ? 'border-amber-900/50' : 'border-slate-800')}>
+          <div className="min-w-[170px]">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500">AI Risk Score · decision fusion</div>
+            <div className="flex items-end gap-2 mt-1">
+              <span className={clsx('text-4xl font-bold tabular-nums leading-none',
+                risk == null ? 'text-slate-600' : sev === 'critical' || sev === 'high' ? 'text-red-400' : sev === 'medium' ? 'text-amber-400' : 'text-emerald-400')}>
+                {risk == null ? '—' : risk.toFixed(0)}
+              </span>
+              <span className="text-slate-600 text-sm mb-1">/ 100</span>
+              {sev && <span className={clsx('badge mb-1', sev === 'critical' || sev === 'high' ? 'badge-critical' : sev === 'medium' ? 'badge-warning' : 'badge-ok')}>{sev.toUpperCase()}</span>}
+            </div>
+            <div className="text-[10px] text-slate-600 mt-1">learned fusion of IF · PCA-AE · TF-AE → one calibrated score</div>
+          </div>
+          <div className="flex-1">
+            <div className="h-2.5 bg-slate-800 rounded-full overflow-hidden">
+              <div className={clsx('h-full rounded-full transition-all duration-500',
+                risk == null ? 'bg-slate-700' : sev === 'critical' || sev === 'high' ? 'bg-red-500' : sev === 'medium' ? 'bg-amber-500' : 'bg-emerald-500')}
+                style={{ width: `${Math.min(100, Math.max(2, risk ?? 0))}%` }} />
+            </div>
+            <div className="flex justify-between text-[9px] font-mono text-slate-600 mt-1">
+              <span>0 · normal</span>
+              {perf?.operating_threshold != null && <span>alert ≥ {(perf.operating_threshold * 100).toFixed(0)}</span>}
+              <span>100 · attack</span>
+            </div>
+          </div>
+          <button onClick={runGuidedDemo} disabled={injecting || injActive}
+            className={clsx('flex-shrink-0 inline-flex items-center gap-2 text-xs font-medium px-3.5 py-2 rounded-md border transition-colors',
+              injecting || injActive ? 'border-slate-700 text-slate-600 cursor-not-allowed' : 'border-sky-700 text-sky-300 hover:bg-sky-950/40')}>
+            <Zap size={13} />{injActive ? 'Running…' : 'Run guided demo'}
+          </button>
+        </div>
 
         {/* Summary KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -538,6 +588,76 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
                : '✓ NOMINAL'}
             </div>
           </div>
+        </div>
+
+        {/* Model performance — offline evaluation of the fused detector */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
+              <BarChart3 size={13} className="text-slate-400" />Model Performance
+            </div>
+            <span className="text-[10px] text-slate-600">
+              held-out evaluation{perf ? ` · ${(perf.n_normal ?? 0) + (perf.n_attack ?? 0)} labeled windows` : ''}
+            </span>
+          </div>
+          {!perf ? (
+            <div className="text-[11px] text-slate-500 py-3">No evaluation report yet — run model/train_meta.py.</div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { l: 'ROC-AUC', v: perf.roc_auc, fmt: (x: number) => x.toFixed(3), good: (x: number) => x >= 0.9 },
+                  { l: 'Precision', v: perf.precision, fmt: (x: number) => `${(x * 100).toFixed(1)}%`, good: (x: number) => x >= 0.9 },
+                  { l: 'Recall', v: perf.recall, fmt: (x: number) => `${(x * 100).toFixed(1)}%`, good: (x: number) => x >= 0.9 },
+                  { l: 'False-positive rate', v: perf.false_positive_rate, fmt: (x: number) => `${(x * 100).toFixed(2)}%`, good: (x: number) => x <= 0.02 },
+                ].map(m => (
+                  <div key={m.l} className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2.5">
+                    <div className="text-[9px] uppercase tracking-wider text-slate-500">{m.l}</div>
+                    <div className={clsx('text-xl font-semibold mt-0.5 tabular-nums', m.v == null ? 'text-slate-600' : m.good(m.v) ? 'text-emerald-400' : 'text-amber-400')}>
+                      {m.v == null ? '—' : m.fmt(m.v)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* learned fusion weights */}
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Learned fusion weights</div>
+                  {perf.fusion_weights && (() => {
+                    const w = perf.fusion_weights!
+                    const max = Math.max(0.001, Math.abs(w.iforest), Math.abs(w.pca_ae), Math.abs(w.tf_ae))
+                    const rows = [['IsolationForest', w.iforest], ['PCA autoencoder', w.pca_ae], ['TF autoencoder', w.tf_ae]] as const
+                    return (
+                      <div className="space-y-1.5">
+                        {rows.map(([name, val]) => (
+                          <div key={name} className="flex items-center gap-2">
+                            <span className="text-[10px] text-slate-400 w-32">{name}</span>
+                            <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full bg-sky-500" style={{ width: `${(Math.abs(val) / max) * 100}%` }} />
+                            </div>
+                            <span className="text-[10px] font-mono text-slate-400 w-10 text-right">{val.toFixed(2)}</span>
+                          </div>
+                        ))}
+                        <div className="text-[9px] text-slate-600 pt-0.5">The fusion learned to weight each detector — here it leans on the autoencoders.</div>
+                      </div>
+                    )
+                  })()}
+                </div>
+                {/* per-attack recall */}
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Detection rate by attack</div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {Object.entries(perf.per_attack_recall ?? {}).map(([name, r]) => (
+                      <div key={name} className="flex items-center justify-between rounded border border-slate-800 bg-slate-950/40 px-2 py-1">
+                        <span className="text-[10px] font-mono text-slate-400 truncate">{name}</span>
+                        <span className={clsx('text-[10px] font-mono font-semibold', r >= 0.99 ? 'text-emerald-400' : r >= 0.8 ? 'text-amber-400' : 'text-red-400')}>{(r * 100).toFixed(0)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Row 1b — Score history + model health */}
