@@ -1,0 +1,68 @@
+{
+  "title": "50 · Incident Response",
+  "uid": "lab-ir",
+  "description": "Automated incident detection and human-approved containment. Open incidents, pending approvals, MITRE-tagged playbooks and detection latency.",
+  "tags": ["lab-soc", "robotics", "incident-response"],
+  "timezone": "browser",
+  "style": "dark",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "5s",
+  "time": { "from": "now-1h", "to": "now" },
+  "schemaVersion": 39,
+  "version": 1,
+  "links": [ { "type": "dashboards", "title": "SOC Dashboards", "tags": ["lab-soc"], "asDropdown": true, "includeVars": false, "keepTime": true, "icon": "apps", "targetBlank": false } ],
+  "annotations": { "list": [
+    { "builtIn": 1, "type": "dashboard", "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts" },
+    { "name": "Attacks", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "enable": true, "iconColor": "red", "expr": "lab_attack_injection_active > 0", "step": "10s", "titleFormat": "Attack in progress" }
+  ] },
+  "templating": { "list": [] },
+  "panels": [
+    { "id": 1, "type": "row", "title": "Incident Queue", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+    {
+      "id": 10, "type": "stat", "title": "Open Incidents", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage6_open_incidents" } ],
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 11, "type": "stat", "title": "Pending Approvals", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage6_pending_approvals" } ],
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 12, "type": "stat", "title": "Detection Latency", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_detection_latency_seconds" } ],
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 2, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 5 }, { "color": "red", "value": 10 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 13, "type": "stat", "title": "Active Attack", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_attack_injection_active" } ],
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "CLEAR", "color": "green", "index": 0 }, "1": { "text": "UNDER ATTACK", "color": "red", "index": 1 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 20, "type": "timeseries", "title": "Open Incidents & Pending Approvals over time", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 6 },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage6_open_incidents", "legendFormat": "open incidents" },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage6_pending_approvals", "legendFormat": "pending approvals" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 2, "fillOpacity": 18, "gradientMode": "opacity", "showPoints": "auto", "spanNulls": true }, "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 21, "type": "bargauge", "title": "Incidents by MITRE Playbook", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 6 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage6_incidents_by_playbook", "legendFormat": "{{playbook}}" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "color": { "mode": "continuous-BlPu" } }, "overrides": [] },
+      "options": { "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true, "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    }
+  ]
+}

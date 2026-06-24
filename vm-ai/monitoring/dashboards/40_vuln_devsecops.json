@@ -1,0 +1,86 @@
+{
+  "title": "40 · Vulnerability & DevSecOps",
+  "uid": "lab-vuln",
+  "description": "Asset vulnerability posture (CVE findings, firmware/config baseline) and the DevSecOps CI/CD security gate. Pipeline verdict timeline shows gate history.",
+  "tags": ["lab-soc", "robotics", "vulnerability", "devsecops"],
+  "timezone": "browser",
+  "style": "dark",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "schemaVersion": 39,
+  "version": 1,
+  "links": [ { "type": "dashboards", "title": "SOC Dashboards", "tags": ["lab-soc"], "asDropdown": true, "includeVars": false, "keepTime": true, "icon": "apps", "targetBlank": false } ],
+  "annotations": { "list": [
+    { "builtIn": 1, "type": "dashboard", "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts" }
+  ] },
+  "templating": { "list": [] },
+  "panels": [
+    { "id": 1, "type": "row", "title": "Vulnerability Management", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+    {
+      "id": 10, "type": "bargauge", "title": "CVE Findings by Severity", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 7, "w": 10, "x": 0, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage4_vuln_count", "legendFormat": "{{severity}}" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true, "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+    {
+      "id": 11, "type": "stat", "title": "Critical", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 7, "w": 3, "x": 10, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage4_vuln_count{severity=\"critical\"}" } ],
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 12, "type": "stat", "title": "Total Findings", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 7, "w": 3, "x": 13, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "sum(lab_stage4_vuln_count)" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "orange" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 13, "type": "stat", "title": "Firmware Patch Status", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 7, "w": 4, "x": 16, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage4_firmware_patch_status" } ],
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "DRIFT", "color": "red", "index": 0 }, "1": { "text": "COMPLIANT", "color": "green", "index": 1 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 14, "type": "stat", "title": "Config Baseline Drift", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 7, "w": 4, "x": 20, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "sum(lab_stage4_baseline_drift_count)" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "none", "justifyMode": "center" }
+    },
+    { "id": 2, "type": "row", "title": "DevSecOps CI/CD Security Gate", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 8 } },
+    {
+      "id": 20, "type": "stat", "title": "Current Verdict", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 5, "w": 8, "x": 0, "y": 9 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage5_pipeline_last_verdict{verdict=\"PASS\"}" } ],
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "FAIL — deploy blocked", "color": "red", "index": 0 }, "1": { "text": "PASS — deploy allowed", "color": "green", "index": 1 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 21, "type": "stat", "title": "Last Pipeline Age", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 5, "w": 8, "x": 8, "y": 9 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage5_pipeline_age_seconds" } ],
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 22, "type": "stat", "title": "Vuln Gate Threshold", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 9 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "vector(7)" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 1, "color": { "mode": "fixed", "fixedColor": "purple" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value_and_name", "colorMode": "none", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 23, "type": "state-timeline", "title": "CI/CD Gate Verdict — history (1 = PASS)", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 14 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage5_pipeline_last_verdict{verdict=\"PASS\"}", "legendFormat": "gate" } ],
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "FAIL", "color": "red", "index": 0 }, "1": { "text": "PASS", "color": "green", "index": 1 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "mergeValues": true, "showValue": "auto", "alignValue": "center", "rowHeight": 0.9, "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } }
+    }
+  ]
+}

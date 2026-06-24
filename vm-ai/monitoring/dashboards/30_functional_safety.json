@@ -1,0 +1,58 @@
+{
+  "title": "30 · Functional Safety & Compliance",
+  "uid": "lab-safety",
+  "description": "Safety supervisor state, SIS integrity and IEC 62443 / NIST 800-82 compliance posture. State timeline shows safety transitions over time.",
+  "tags": ["lab-soc", "robotics", "safety"],
+  "timezone": "browser",
+  "style": "dark",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "5s",
+  "time": { "from": "now-1h", "to": "now" },
+  "schemaVersion": 39,
+  "version": 1,
+  "links": [ { "type": "dashboards", "title": "SOC Dashboards", "tags": ["lab-soc"], "asDropdown": true, "includeVars": false, "keepTime": true, "icon": "apps", "targetBlank": false } ],
+  "annotations": { "list": [
+    { "builtIn": 1, "type": "dashboard", "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts" },
+    { "name": "Attacks", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "enable": true, "iconColor": "red", "expr": "lab_attack_injection_active > 0", "step": "10s", "titleFormat": "Attack in progress" }
+  ] },
+  "templating": { "list": [] },
+  "panels": [
+    { "id": 1, "type": "row", "title": "Safety System Status", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+    {
+      "id": 10, "type": "stat", "title": "Safety State", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 5, "w": 8, "x": 0, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage3_safety_state" } ],
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "NORMAL", "color": "green", "index": 0 }, "1": { "text": "DEGRADED", "color": "orange", "index": 1 }, "2": { "text": "EMERGENCY STOP", "color": "red", "index": 2 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 }, { "color": "red", "value": 2 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 11, "type": "stat", "title": "SIS Integrity", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 5, "w": 8, "x": 8, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage3_sis_integrity" } ],
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "TAMPERED", "color": "red", "index": 0 }, "1": { "text": "VERIFIED", "color": "green", "index": 1 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 12, "type": "gauge", "title": "IEC 62443 Compliance", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_iec62443_compliance_score" } ],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "orange", "value": 60 }, { "color": "green", "value": 80 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showThresholdLabels": false, "showThresholdMarkers": true }
+    },
+    {
+      "id": 20, "type": "state-timeline", "title": "Safety State — transitions over time", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 6 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage3_safety_state", "legendFormat": "safety" } ],
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "NORMAL", "color": "green", "index": 0 }, "1": { "text": "DEGRADED", "color": "orange", "index": 1 }, "2": { "text": "EMERGENCY", "color": "red", "index": 2 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 }, { "color": "red", "value": 2 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "mergeValues": true, "showValue": "auto", "alignValue": "center", "rowHeight": 0.9, "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } }
+    },
+    {
+      "id": 21, "type": "timeseries", "title": "IEC 62443 Compliance Score — trend", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 13 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_iec62443_compliance_score", "legendFormat": "compliance %" } ],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 2, "fillOpacity": 18, "gradientMode": "opacity", "showPoints": "never", "spanNulls": true }, "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "orange", "value": 60 }, { "color": "green", "value": 80 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "min"] }, "tooltip": { "mode": "single" } }
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "title": "90 · Platform Health",
+  "uid": "lab-health",
+  "description": "Operational health of the platform: per-component reachability across zones, sensor log liveness and monitoring-stack scrape health.",
+  "tags": ["lab-soc", "robotics", "platform-health"],
+  "timezone": "browser",
+  "style": "dark",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "schemaVersion": 39,
+  "version": 1,
+  "links": [ { "type": "dashboards", "title": "SOC Dashboards", "tags": ["lab-soc"], "asDropdown": true, "includeVars": false, "keepTime": true, "icon": "apps", "targetBlank": false } ],
+  "annotations": { "list": [
+    { "builtIn": 1, "type": "dashboard", "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts" }
+  ] },
+  "templating": { "list": [] },
+  "panels": [
+    { "id": 1, "type": "row", "title": "Component Reachability", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+    {
+      "id": 10, "type": "stat", "title": "Components Reachable", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "sum(lab_component_up)" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "orange", "value": 5 }, { "color": "green", "value": 7 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 11, "type": "stat", "title": "Sensor Log Liveness", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_security_sensor_log_up" } ],
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "STALE", "color": "red", "index": 0 }, "1": { "text": "LIVE", "color": "green", "index": 1 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 12, "type": "stat", "title": "Prometheus Scrape Targets Up", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 5, "w": 12, "x": 12, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "sum(up)" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "green" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 20, "type": "bargauge", "title": "Component Health · 1 = reachable", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 6 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_component_up", "legendFormat": "{{component}}" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "max": 1, "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "index": 0 }, "1": { "text": "UP", "index": 1 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "orientation": "horizontal", "displayMode": "lcd", "showUnfilled": true, "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+    {
+      "id": 21, "type": "state-timeline", "title": "Component Reachability — over time", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 6 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_component_up", "legendFormat": "{{component}}" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "mergeValues": true, "showValue": "never", "alignValue": "left", "rowHeight": 0.9, "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } }
+    }
+  ]
+}

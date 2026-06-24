@@ -1,0 +1,129 @@
+{
+  "title": "00 · Executive Overview",
+  "uid": "lab-exec",
+  "description": "Single pane of glass for the Robotics Security Platform. KPI tiles drill down into the per-domain dashboards.",
+  "tags": ["lab-soc", "robotics", "overview"],
+  "timezone": "browser",
+  "style": "dark",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "schemaVersion": 39,
+  "version": 1,
+  "links": [
+    { "type": "dashboards", "title": "SOC Dashboards", "tags": ["lab-soc"], "asDropdown": true, "includeVars": false, "keepTime": true, "icon": "apps", "targetBlank": false }
+  ],
+  "annotations": { "list": [
+    { "builtIn": 1, "type": "dashboard", "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts" },
+    { "name": "Attacks", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "enable": true, "iconColor": "red", "expr": "lab_attack_injection_active > 0", "step": "10s", "titleFormat": "Attack in progress" }
+  ] },
+  "templating": { "list": [] },
+  "panels": [
+    { "id": 1, "type": "row", "title": "Live Security Posture", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+    {
+      "id": 10, "type": "stat", "title": "Safety State", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 3, "x": 0, "y": 1 }, "links": [ { "title": "Open Functional Safety", "url": "/d/lab-safety", "targetBlank": false } ],
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage3_safety_state" } ],
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "NORMAL", "color": "green", "index": 0 }, "1": { "text": "DEGRADED", "color": "orange", "index": 1 }, "2": { "text": "EMERGENCY", "color": "red", "index": 2 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 }, { "color": "red", "value": 2 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 11, "type": "stat", "title": "Attack Status", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 3, "x": 3, "y": 1 }, "links": [ { "title": "Open OT Network", "url": "/d/lab-ot", "targetBlank": false } ],
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_attack_injection_active" } ],
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "CLEAR", "color": "green", "index": 0 }, "1": { "text": "UNDER ATTACK", "color": "red", "index": 1 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 12, "type": "stat", "title": "Open Incidents", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 3, "x": 6, "y": 1 }, "links": [ { "title": "Open Incident Response", "url": "/d/lab-ir", "targetBlank": false } ],
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage6_open_incidents" } ],
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 13, "type": "stat", "title": "Pending Approvals", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 3, "x": 9, "y": 1 }, "links": [ { "title": "Open Incident Response", "url": "/d/lab-ir", "targetBlank": false } ],
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage6_pending_approvals" } ],
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 14, "type": "stat", "title": "Critical CVEs", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 3, "x": 12, "y": 1 }, "links": [ { "title": "Open Vulnerability & DevSecOps", "url": "/d/lab-vuln", "targetBlank": false } ],
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage4_vuln_count{severity=\"critical\"}" } ],
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 15, "type": "stat", "title": "CI/CD Gate", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 3, "x": 15, "y": 1 }, "links": [ { "title": "Open Vulnerability & DevSecOps", "url": "/d/lab-vuln", "targetBlank": false } ],
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage5_pipeline_last_verdict{verdict=\"PASS\"}" } ],
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "FAIL", "color": "red", "index": 0 }, "1": { "text": "PASS", "color": "green", "index": 1 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 16, "type": "stat", "title": "SIS Integrity", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 3, "x": 18, "y": 1 }, "links": [ { "title": "Open Functional Safety", "url": "/d/lab-safety", "targetBlank": false } ],
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage3_sis_integrity" } ],
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "TAMPERED", "color": "red", "index": 0 }, "1": { "text": "VERIFIED", "color": "green", "index": 1 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 17, "type": "gauge", "title": "IEC 62443 Compliance", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 3, "x": 21, "y": 1 }, "links": [ { "title": "Open Functional Safety", "url": "/d/lab-safety", "targetBlank": false } ],
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_iec62443_compliance_score" } ],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "orange", "value": 60 }, { "color": "green", "value": 80 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showThresholdLabels": false, "showThresholdMarkers": true }
+    },
+    { "id": 2, "type": "row", "title": "Detection & Traffic Trends", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 } },
+    {
+      "id": 20, "type": "timeseries", "title": "Network Anomaly Detectors", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 }, "links": [ { "title": "Open AI Threat Detection", "url": "/d/lab-ai", "targetBlank": false } ],
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage2_latest_iforest_score", "legendFormat": "IsolationForest" },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage2_latest_pca_z", "legendFormat": "PCA-AE z" },
+        { "refId": "C", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage2_latest_tf_z", "legendFormat": "TF-AE z" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 15, "gradientMode": "opacity", "showPoints": "never", "spanNulls": true }, "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 21, "type": "timeseries", "title": "Modbus/TCP Traffic Rate", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 }, "links": [ { "title": "Open OT Network", "url": "/d/lab-ot", "targetBlank": false } ],
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage1_modbus_traffic_rate", "legendFormat": "req/s" } ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 20, "gradientMode": "opacity", "showPoints": "never", "spanNulls": true }, "color": { "mode": "fixed", "fixedColor": "cyan" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "mean"] }, "tooltip": { "mode": "single" } }
+    },
+    { "id": 3, "type": "row", "title": "Operations Summary", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 } },
+    {
+      "id": 30, "type": "stat", "title": "Components Reachable", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 15 }, "links": [ { "title": "Open Platform Health", "url": "/d/lab-health", "targetBlank": false } ],
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "sum(lab_component_up)" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "orange", "value": 5 }, { "color": "green", "value": 7 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 31, "type": "stat", "title": "Anomaly Alerts (total)", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 15 }, "links": [ { "title": "Open AI Threat Detection", "url": "/d/lab-ai", "targetBlank": false } ],
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage2_alerts_total" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 32, "type": "bargauge", "title": "CVEs by Severity", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 15 }, "links": [ { "title": "Open Vulnerability & DevSecOps", "url": "/d/lab-vuln", "targetBlank": false } ],
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage4_vuln_count", "legendFormat": "{{severity}}" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true, "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+    {
+      "id": 33, "type": "bargauge", "title": "Incidents by Playbook", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 15 }, "links": [ { "title": "Open Incident Response", "url": "/d/lab-ir", "targetBlank": false } ],
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage6_incidents_by_playbook", "legendFormat": "{{playbook}}" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "color": { "mode": "continuous-BlPu" } }, "overrides": [] },
+      "options": { "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true, "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    }
+  ]
+}

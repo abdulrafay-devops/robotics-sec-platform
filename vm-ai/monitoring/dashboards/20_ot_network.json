@@ -1,0 +1,85 @@
+{
+  "title": "20 · OT Network & Protocols",
+  "uid": "lab-ot",
+  "description": "OT/IT segmentation visibility: Modbus/TCP traffic, Zeek industrial-protocol parsing, and Suricata IDS. Attack windows are shaded.",
+  "tags": ["lab-soc", "robotics", "ot-network"],
+  "timezone": "browser",
+  "style": "dark",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "schemaVersion": 39,
+  "version": 1,
+  "links": [ { "type": "dashboards", "title": "SOC Dashboards", "tags": ["lab-soc"], "asDropdown": true, "includeVars": false, "keepTime": true, "icon": "apps", "targetBlank": false } ],
+  "annotations": { "list": [
+    { "builtIn": 1, "type": "dashboard", "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts" },
+    { "name": "Attacks", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "enable": true, "iconColor": "red", "expr": "lab_attack_injection_active > 0", "step": "10s", "titleFormat": "Attack in progress" }
+  ] },
+  "templating": { "list": [] },
+  "panels": [
+    { "id": 1, "type": "row", "title": "Industrial Protocol Traffic", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+    {
+      "id": 10, "type": "stat", "title": "Modbus Rate (now)", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage1_modbus_traffic_rate" } ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2, "color": { "mode": "fixed", "fixedColor": "cyan" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 11, "type": "stat", "title": "Zeek Features (cumulative)", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "sum(lab_zeek_modbus_features_total)" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "purple" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 12, "type": "stat", "title": "Suricata Events (total)", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "sum(lab_suricata_events_total)" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 13, "type": "stat", "title": "Suricata Alerts (total)", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "sum(lab_suricata_alerts_total)" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 14, "type": "stat", "title": "Attack Status", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_attack_injection_active" } ],
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "CLEAR", "color": "green", "index": 0 }, "1": { "text": "UNDER ATTACK", "color": "red", "index": 1 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "center" }
+    },
+    {
+      "id": 20, "type": "timeseries", "title": "Modbus/TCP Traffic Rate", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 5 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage1_modbus_traffic_rate", "legendFormat": "req/s" } ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 22, "gradientMode": "opacity", "showPoints": "never", "spanNulls": true }, "color": { "mode": "fixed", "fixedColor": "cyan" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "mean", "max"] }, "tooltip": { "mode": "single" } }
+    },
+    {
+      "id": 21, "type": "timeseries", "title": "Zeek Modbus Feature Throughput (rate)", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 5 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "sum(rate(lab_zeek_modbus_features_total[$__rate_interval]))", "legendFormat": "features/s" } ],
+      "fieldConfig": { "defaults": { "unit": "cps", "custom": { "drawStyle": "bars", "lineWidth": 1, "fillOpacity": 60, "gradientMode": "hue", "showPoints": "never", "spanNulls": true }, "color": { "mode": "fixed", "fixedColor": "purple" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } }
+    },
+    { "id": 2, "type": "row", "title": "Suricata IDS", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 } },
+    {
+      "id": 30, "type": "timeseries", "title": "Suricata Events vs Alerts (rate)", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 15 },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "sum(rate(lab_suricata_events_total[$__rate_interval]))", "legendFormat": "events/s" },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "sum(rate(lab_suricata_alerts_total[$__rate_interval]))", "legendFormat": "alerts/s" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "cps", "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 15, "gradientMode": "opacity", "showPoints": "never", "spanNulls": true }, "color": { "mode": "palette-classic" } }, "overrides": [
+        { "matcher": { "id": "byName", "options": "alerts/s" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } } ] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] }, "tooltip": { "mode": "multi" } }
+    }
+  ]
+}

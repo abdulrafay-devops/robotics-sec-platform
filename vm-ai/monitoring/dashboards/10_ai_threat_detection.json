@@ -1,0 +1,85 @@
+{
+  "title": "10 · AI Threat Detection",
+  "uid": "lab-ai",
+  "description": "Dual-plane ML detection: Modbus-network ensemble (IsolationForest + PCA-AE + TF-AE) and robot-behavior LSTM. Attack windows are shaded.",
+  "tags": ["lab-soc", "robotics", "ai-detection"],
+  "timezone": "browser",
+  "style": "dark",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "schemaVersion": 39,
+  "version": 1,
+  "links": [ { "type": "dashboards", "title": "SOC Dashboards", "tags": ["lab-soc"], "asDropdown": true, "includeVars": false, "keepTime": true, "icon": "apps", "targetBlank": false } ],
+  "annotations": { "list": [
+    { "builtIn": 1, "type": "dashboard", "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts" },
+    { "name": "Attacks", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "enable": true, "iconColor": "red", "expr": "lab_attack_injection_active > 0", "step": "10s", "titleFormat": "Attack in progress" }
+  ] },
+  "templating": { "list": [] },
+  "panels": [
+    { "id": 1, "type": "row", "title": "Network Detection Plane (Modbus features → 5s windows)", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+    {
+      "id": 10, "type": "stat", "title": "IsolationForest", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage2_latest_iforest_score" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 4, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 0.15 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 11, "type": "stat", "title": "PCA-AE z-score", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage2_latest_pca_z" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 2, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 3 }, { "color": "red", "value": 6 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 12, "type": "stat", "title": "TF-AE z-score", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage2_latest_tf_z" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 2, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 3 }, { "color": "red", "value": 6 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 13, "type": "stat", "title": "Detection Latency", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_detection_latency_seconds" } ],
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 2, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 5 }, { "color": "red", "value": 10 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 14, "type": "stat", "title": "Anomaly Alerts (total)", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage2_alerts_total" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
+    },
+    {
+      "id": 20, "type": "timeseries", "title": "Network Anomaly Detectors over time", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "description": "PCA/TF are z-scores (alert ≳ 3σ); IsolationForest decision score (alert ≳ 0.15).",
+      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 5 },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage2_latest_iforest_score", "legendFormat": "IsolationForest" },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage2_latest_pca_z", "legendFormat": "PCA-AE z" },
+        { "refId": "C", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage2_latest_tf_z", "legendFormat": "TF-AE z" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 16, "gradientMode": "opacity", "showPoints": "never", "spanNulls": true }, "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max", "mean"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 21, "type": "timeseries", "title": "Alerts by Severity (rate)", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 5 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "sum by (severity) (rate(lab_stage2_alert_severity_total[$__rate_interval]))", "legendFormat": "{{severity}}" } ],
+      "fieldConfig": { "defaults": { "unit": "cps", "custom": { "drawStyle": "bars", "lineWidth": 1, "fillOpacity": 70, "gradientMode": "hue", "showPoints": "never", "stacking": { "mode": "normal", "group": "A" } }, "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    { "id": 2, "type": "row", "title": "Robot Behavior Plane (LSTM + physics envelope)", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 } },
+    {
+      "id": 30, "type": "timeseries", "title": "Robot Behavior Anomaly · LSTM z-score", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 15 },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_robot_lstm_z", "legendFormat": "Robot LSTM z" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 22, "gradientMode": "scheme", "showPoints": "never", "spanNulls": true }, "color": { "mode": "continuous-GrYlRd" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] }, "tooltip": { "mode": "single" } }
+    }
+  ]
+}
