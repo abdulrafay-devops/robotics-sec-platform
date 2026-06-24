@@ -30,9 +30,11 @@ F-02). Left as-is intentionally for the POC; documented here, not yet split.
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import logging
 import os
+import re
 import threading
 import time
 import subprocess
@@ -932,16 +934,68 @@ def hmi_logs(service: str = "supervisor") -> dict:
             "logs": f"Failed to read logs: {exc}"
         }
 
+def _valid_exceptions() -> dict:
+    """Parse the DevSecOps gate's exceptions.yml and return a map of
+    cve_id -> {until, approver} for exceptions that are still in effect
+    (not past their expiry). Used to annotate vulnerability findings as
+    'risk accepted' so the dashboard shows that a still-present finding is
+    governed (rather than just bare red). Mirrors vuln_gate.py's parser.
+    """
+    paths = [
+        "/opt/lab/vm-ai/devsecops/exceptions.yml",
+        "/vagrant/vm-ai/devsecops/exceptions.yml",
+    ]
+    path = next((p for p in paths if os.path.exists(p)), None)
+    if not path:
+        return {}
+    today = dt.date.today()
+    valid: dict = {}
+    cur = None
+    try:
+        for raw in open(path, "r", encoding="utf-8"):
+            line = raw.rstrip()
+            if not line or line.lstrip().startswith("#") or line.startswith("exceptions:"):
+                continue
+            m = re.match(r'^\s+-\s+cve_id:\s*(.+)$', line)
+            if m:
+                cur = {"cve_id": m.group(1).strip().strip('\'"')}
+                continue
+            if cur is None:
+                continue
+            m = re.match(r'^\s+(until|approver):\s*(.+)$', line)
+            if m:
+                cur[m.group(1)] = m.group(2).strip().strip('\'"')
+                if cur.get("until") and cur.get("cve_id"):
+                    try:
+                        if dt.date.fromisoformat(cur["until"]) >= today:
+                            valid[cur["cve_id"]] = {
+                                "until": cur["until"],
+                                "approver": cur.get("approver"),
+                            }
+                    except ValueError:
+                        pass
+    except OSError as exc:
+        LOG.error("Failed to read exceptions.yml: %s", exc)
+    return valid
+
+
 @app.get("/api/stages/reports", dependencies=[Depends(_require_api_key)])
 def get_stages_reports() -> dict:
     """Read and return static security reports from filesystem for stages rendering."""
-    # 1. Vulnerabilities
+    # 1. Vulnerabilities (annotated with any in-effect risk-acceptance so the
+    #    dashboard can show a still-present finding is governed, not just red).
     vuln_data = None
     vuln_path = "/var/lab/state/vulnerabilities.json"
     if os.path.exists(vuln_path):
         try:
             with open(vuln_path, "r", encoding="utf-8") as fh:
                 vuln_data = json.load(fh)
+            accepted = _valid_exceptions()
+            if isinstance(vuln_data, list) and accepted:
+                for f in vuln_data:
+                    ex = accepted.get(f.get("cve_id"))
+                    if ex:
+                        f["risk_accepted"] = ex
         except Exception as exc:
             LOG.error("Failed to read vulnerabilities.json: %s", exc)
 

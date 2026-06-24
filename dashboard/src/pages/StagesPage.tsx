@@ -4,7 +4,7 @@ import {
   Network, Brain, Shield, Search, GitBranch, AlertOctagon,
   CheckCircle2, XCircle, ChevronRight, Activity,
   Lock, Server, Cpu, ExternalLink,
-  ShieldAlert, RefreshCw, Hash, Radar,
+  ShieldAlert, RefreshCw, Hash, Radar, ShieldCheck,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
@@ -549,6 +549,7 @@ function ScanMetaStrip({ meta }: { meta: any }) {
 function Stage4Detail({ reports, metrics }: { reports: any; metrics: PrometheusMetrics | null }) {
   const vulns = reports?.vulnerabilities ?? []
   const drift = reports?.baseline_drift?.drift ?? []
+  const acceptedCount = vulns.filter((v: any) => v.risk_accepted).length
   const CVSS_BAND = (cvss: number) =>
     cvss >= 9 ? { cls: 'bg-red-950 border-red-700 text-red-300', lbl: 'CRIT' }
       : cvss >= 7 ? { cls: 'bg-amber-950 border-amber-700 text-amber-300', lbl: 'HIGH' }
@@ -561,7 +562,7 @@ function Stage4Detail({ reports, metrics }: { reports: any; metrics: PrometheusM
       <DataGrid items={[
         { label: 'Critical CVEs', value: String(metrics?.vuln_by_severity?.critical ?? 0), accent: (metrics?.vuln_by_severity?.critical ?? 0) > 0 },
         { label: 'High CVEs', value: String(metrics?.vuln_by_severity?.high ?? 0) },
-        { label: 'Medium CVEs', value: String(metrics?.vuln_by_severity?.medium ?? 0) },
+        { label: 'Risk-Accepted', value: `${acceptedCount} / ${vulns.length}`, accent: acceptedCount > 0 },
         { label: 'Critical Drift', value: String(metrics ? (metrics as any).baseline_drift_critical ?? 0 : 0) },
         { label: 'Total Findings', value: String(vulns.length) },
         { label: 'Drift Entries', value: String(drift.length) },
@@ -574,6 +575,16 @@ function Stage4Detail({ reports, metrics }: { reports: any; metrics: PrometheusM
       ) : (
         <>
           <SectionTitle icon={ShieldAlert} text="CVE Findings" count={vulns.length} />
+          {acceptedCount > 0 && (
+            <div className="flex items-start gap-2 text-[10px] font-mono text-slate-400 bg-slate-950/40 border border-slate-800/50 rounded-lg px-3 py-2 -mt-1">
+              <ShieldCheck size={13} className="text-emerald-400 mt-px flex-shrink-0" />
+              <span>
+                {acceptedCount} of {vulns.length} finding(s) <span className="text-emerald-300">risk-accepted</span> — still
+                listed here (a real register never hides a present vulnerability); the deploy is governed via the
+                Stage 5 exception register, with a named approver and an expiry date.
+              </span>
+            </div>
+          )}
           <div className="overflow-x-auto rounded-lg border border-slate-800/50 max-h-52 overflow-y-auto">
             <table className="min-w-full text-[10.5px] font-mono">
               <thead className="sticky top-0 bg-slate-950">
@@ -582,14 +593,16 @@ function Stage4Detail({ reports, metrics }: { reports: any; metrics: PrometheusM
                   <th className="px-3 py-2 text-left">CVE</th>
                   <th className="px-3 py-2 text-left">Asset</th>
                   <th className="px-3 py-2 text-left w-12">CVSS</th>
+                  <th className="px-3 py-2 text-left">Status</th>
                   <th className="px-3 py-2 text-left">Remediation</th>
                 </tr>
               </thead>
               <tbody>
                 {vulns.map((v: any, i: number) => {
                   const b = CVSS_BAND(v.cvss)
+                  const ra = v.risk_accepted
                   return (
-                    <tr key={i} className="border-b border-slate-900/80 hover:bg-slate-800/20">
+                    <tr key={i} className={clsx('border-b border-slate-900/80 hover:bg-slate-800/20', ra && 'opacity-70')}>
                       <td className="px-3 py-2">
                         <span className={clsx('text-[8.5px] px-1.5 py-0.5 rounded border font-bold', b.cls)}>{b.lbl}</span>
                       </td>
@@ -601,6 +614,16 @@ function Stage4Detail({ reports, metrics }: { reports: any; metrics: PrometheusM
                       </td>
                       <td className="px-3 py-2 text-slate-400">{v.asset_ip} ({v.asset_product ?? '—'})</td>
                       <td className="px-3 py-2 font-bold text-slate-200">{v.cvss.toFixed(1)}</td>
+                      <td className="px-3 py-2">
+                        {ra ? (
+                          <span className="inline-flex items-center gap-1 text-[8.5px] px-1.5 py-0.5 rounded border font-bold bg-emerald-950 border-emerald-800 text-emerald-300"
+                            title={`Approved by ${ra.approver ?? 'n/a'}`}>
+                            <ShieldCheck size={9} /> ACCEPTED · {ra.until}
+                          </span>
+                        ) : (
+                          <span className="text-[8.5px] px-1.5 py-0.5 rounded border font-bold bg-red-950 border-red-800 text-red-300">OPEN</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-slate-500 max-w-[200px] truncate">{v.remediation}</td>
                     </tr>
                   )
