@@ -112,6 +112,39 @@ fi
 touch /var/lab/log/suricata/eve.json
 suricata -c /etc/suricata/suricata.yaml --pidfile /run/suricata.pid -i ${OT_IF} > /var/log/suricata/suricata-startup.log 2>&1 &
 
+# ── Seed ntopng admin login (admin / labdemo) ────────────────────────────────
+# ntopng keeps its users in the AI-zone Redis. With the factory default
+# (admin/admin) it traps EVERY login on a "you must change your password"
+# screen, so the web UI looks broken. We pre-seed a NON-default password plus
+# the admin_password_changed flag BEFORE ntopng starts, so it boots straight to
+# a usable login. Idempotent: only seeds when no admin password exists yet, so
+# a password you set later in the UI is preserved and a fresh/wiped Redis is
+# auto-recovered. Credentials: admin / labdemo
+echo "Seeding ntopng admin credentials (admin/labdemo) if unset..."
+/opt/lab/venv-shipper/bin/python - <<'PYEOF' || echo "ntopng seed skipped (non-fatal)"
+import hashlib, os, sys
+try:
+    import redis
+except Exception as exc:
+    print("redis module unavailable; skipping ntopng seed:", exc); sys.exit(0)
+pw = os.environ.get("LAB_REDIS_PASSWORD") or None
+try:
+    r = redis.Redis(host="192.168.40.30", port=6379, password=pw,
+                    socket_connect_timeout=5, socket_timeout=5)
+    if not r.get("ntopng.user.admin.password"):
+        r.set("ntopng.user.admin.password", hashlib.md5(b"labdemo").hexdigest())
+        r.set("ntopng.user.admin.full_name", "Administrator")
+        r.set("ntopng.user.admin.group", "administrator")
+        r.set("ntopng.user.admin.allowed_nets", "0.0.0.0/0,::/0")
+        r.set("ntopng.user.admin.allowed_interface", "")
+        r.set("ntopng.prefs.admin_password_changed", "1")
+        print("ntopng admin seeded: admin / labdemo")
+    else:
+        print("ntopng admin already configured; leaving as-is")
+except Exception as exc:
+    print("ntopng seed failed (non-fatal):", exc)
+PYEOF
+
 # Start ntopng
 echo "Starting ntopng..."
 mkdir -p /var/run/ntopng /var/lib/ntopng
