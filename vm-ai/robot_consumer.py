@@ -40,6 +40,7 @@ from model.robot_features import (
     N_CHANNELS,
     N_JOINTS,
     ROBOT_FEATURE_VERSION,
+    SAMPLE_HZ,
     WINDOW_LEN,
     derive_channels,
     envelope_violations,
@@ -68,6 +69,14 @@ ANOMALY_LIST = os.environ.get("LAB_REDIS_ANOMALY_LIST", "lab.anomaly.events")
 
 ANOMALY_CONSECUTIVE_REQUIRED = int(os.environ.get("LAB_ROBOT_ANOMALY_CONSECUTIVE", "2"))
 ALERT_COOLDOWN_S = float(os.environ.get("LAB_ROBOT_ALERT_COOLDOWN_S", "45.0"))
+# The LSTM was trained on a CONTIGUOUS 10 Hz stream, so its finite-difference
+# velocities assume uniform sample spacing. If the live tap stutters — e.g. the
+# host sleeps/resumes or the Gazebo sim is CPU-starved — the raw window develops
+# time gaps that inflate the derived velocity and cause FALSE anomalies. We
+# resample the recent samples onto a uniform SAMPLE_HZ grid from their real
+# timestamps before windowing; a window containing a hole larger than this is
+# skipped rather than scored on interpolated guesswork.
+MAX_WINDOW_GAP_S = float(os.environ.get("LAB_ROBOT_MAX_GAP_S", "1.5"))
 _DEMO_MODE = os.environ.get("LAB_DEMO_MODE", "1") != "0"
 # Robot anomalies are an OT-zone event; use the production-PLC IP as the source so
 # the IR engine (which requires a numeric SRC_IP) opens an incident normally.
@@ -153,13 +162,14 @@ class RobotScorer:
 
 # ─── window construction from the rolling stream file ────────────────────────
 
-def _read_positions(path: str) -> tuple[Optional[np.ndarray], float]:
-    """Return (positions (N,6), file_mtime) or (None, 0) if unusable."""
+def _read_positions(path: str) -> tuple[Optional[np.ndarray], Optional[np.ndarray], float]:
+    """Return (positions (N,6), timestamps (N,), file_mtime) or (None, None, 0)."""
     try:
         st = os.stat(path)
     except FileNotFoundError:
-        return None, 0.0
+        return None, None, 0.0
     rows = []
+    tss = []
     try:
         with open(path, "r", encoding="utf-8") as fh:
             for line in fh:
@@ -168,24 +178,71 @@ def _read_positions(path: str) -> tuple[Optional[np.ndarray], float]:
                     continue
                 try:
                     d = json.loads(line)
-                    pos = d.get("position") or []
-                    if len(pos) >= 6:
-                        rows.append([float(x) for x in pos[:6]])
                 except (ValueError, TypeError):
                     continue
+                pos = d.get("position") or []
+                ts = d.get("ts")
+                if ts is None:
+                    ts = d.get("timestamp")
+                if len(pos) < 6 or ts is None:
+                    continue
+                try:
+                    tval = float(ts)
+                except (ValueError, TypeError):
+                    continue
+                rows.append([float(x) for x in pos[:6]])
+                tss.append(tval)
     except OSError:
-        return None, 0.0
+        return None, None, 0.0
     if not rows:
-        return None, st.st_mtime
-    return np.asarray(rows, dtype=np.float64), st.st_mtime
+        return None, None, st.st_mtime
+    return (np.asarray(rows, dtype=np.float64),
+            np.asarray(tss, dtype=np.float64), st.st_mtime)
 
 
-def _latest_window(positions: np.ndarray) -> Optional[np.ndarray]:
-    """Most-recent (WINDOW_LEN, N_CHANNELS) window; velocity derived over the
-    whole buffer so the leading velocity is real (matches training windows)."""
-    if positions is None or positions.shape[0] < WINDOW_LEN:
+def _latest_window(positions: np.ndarray,
+                   timestamps: np.ndarray) -> Optional[np.ndarray]:
+    """Most-recent (WINDOW_LEN, N_CHANNELS) window, resampled onto a uniform
+    SAMPLE_HZ grid from the samples' real timestamps so the derived velocities
+    match the training distribution even when the live stream stutters.
+
+    Returns None if the recent stream is too short to cover the window or has a
+    hole too large to interpolate honestly (in which case we skip scoring rather
+    than raise a false anomaly on guessed data)."""
+    if positions is None or timestamps is None or positions.shape[0] < 2:
         return None
-    ch = derive_channels(positions)
+    # Only the recent tail is needed for a 5 s window (with margin for gaps).
+    tail = 4 * WINDOW_LEN
+    pos = positions[-tail:]
+    ts = timestamps[-tail:]
+    # Strictly-increasing timestamps are required for interpolation.
+    order = np.argsort(ts, kind="stable")
+    ts = ts[order]
+    pos = pos[order]
+    keep = np.concatenate(([True], np.diff(ts) > 0))
+    ts = ts[keep]
+    pos = pos[keep]
+    if ts.shape[0] < 2:
+        return None
+    span = WINDOW_LEN / SAMPLE_HZ          # 5.0 s at 10 Hz
+    t_last = float(ts[-1])
+    t_start = t_last - span
+    # Need enough history to cover the whole window without extrapolating.
+    if float(ts[0]) > t_start:
+        return None
+    # Reject a window with a hole too large to interpolate honestly.
+    in_span = (ts >= t_start) & (ts <= t_last)
+    ts_in = ts[in_span]
+    if ts_in.shape[0] >= 2 and float(np.max(np.diff(ts_in))) > MAX_WINDOW_GAP_S:
+        return None
+    # Uniform grid of WINDOW_LEN+1 points: the extra leading point gives the
+    # first kept row a real finite-difference velocity (as the old contiguous-
+    # buffer path did before slicing).
+    grid = np.linspace(t_start, t_last, WINDOW_LEN + 1)
+    resamp = np.empty((WINDOW_LEN + 1, pos.shape[1]), dtype=np.float64)
+    for j in range(pos.shape[1]):
+        resamp[:, j] = np.interp(grid, ts, pos[:, j])
+    ch = derive_channels(resamp)
     return ch[-WINDOW_LEN:]
 
 
@@ -286,9 +343,9 @@ def main() -> int:
             if win is not None:
                 result = scorer.score(win)
         else:
-            positions, mtime = _read_positions(STREAM_FILE)
+            positions, timestamps, mtime = _read_positions(STREAM_FILE)
             if positions is not None and (now - mtime) <= STALE_S:
-                win = _latest_window(positions)
+                win = _latest_window(positions, timestamps)
                 if win is not None:
                     result = scorer.score(win)
 
