@@ -105,10 +105,10 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
     },
     {
-      "id": 31, "type": "stat", "title": "Anomaly Alerts (total)", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "id": 31, "type": "stat", "title": "Alarm Load (5 min)", "description": "AI anomaly alarms raised in the last 5 minutes (live load, not a false-positive rate). A burst with no attack injected = a misbehaving detector.", "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
       "gridPos": { "h": 6, "w": 6, "x": 6, "y": 15 }, "links": [ { "title": "Open AI Threat Detection", "url": "/d/lab-ai", "targetBlank": false } ],
-      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_stage2_alerts_total" } ],
-      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_ai_anomaly_alerts_5m{plane=\"all\"}" } ],
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 3 }, { "color": "red", "value": 10 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
     },
     {

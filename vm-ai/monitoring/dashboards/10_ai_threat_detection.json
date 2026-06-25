@@ -80,6 +80,27 @@
       "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_robot_lstm_z", "legendFormat": "Robot LSTM z" } ],
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 22, "gradientMode": "scheme", "showPoints": "never", "spanNulls": true }, "color": { "mode": "continuous-GrYlRd" } }, "overrides": [] },
       "options": { "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] }, "tooltip": { "mode": "single" } }
+    },
+    { "id": 3, "type": "row", "title": "Operational Health — Alarm Load", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 } },
+    {
+      "id": 40, "type": "timeseries", "title": "Anomaly Alarm Load · alerts in the last 5 min (by plane)",
+      "description": "Live alarm VOLUME the detectors are raising — honest operational load, not a false-positive rate (FP cannot be known live without triage). A sustained burst while NO attack is injected = a misbehaving detector / alert storm; e.g. this morning's robot drift would have climbed here and now sits flat.",
+      "datasource": { "type": "prometheus", "uid": "lab-prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_ai_anomaly_alerts_5m{plane=\"all\"}", "legendFormat": "all planes" },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_ai_anomaly_alerts_5m{plane=\"network\"}", "legendFormat": "network" },
+        { "refId": "C", "datasource": { "type": "prometheus", "uid": "lab-prometheus" }, "expr": "lab_ai_anomaly_alerts_5m{plane=\"robot\"}", "legendFormat": "robot" }
+      ],
+      "fieldConfig": { "defaults": {
+        "unit": "short", "min": 0,
+        "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 16, "gradientMode": "opacity", "showPoints": "auto", "spanNulls": true, "thresholdsStyle": { "mode": "dashed" } },
+        "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 3 }, { "color": "red", "value": 10 } ] },
+        "color": { "mode": "palette-classic" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "all planes" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }, { "id": "custom.lineWidth", "value": 3 } ] }
+        ] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
     }
   ]
 }

@@ -566,6 +566,44 @@ def _detection_latency() -> float:
     return best_latency
 
 
+def _ai_anomaly_alerts_recent(window_s: float = 300.0) -> dict[str, int]:
+    """Count AI anomaly alarms raised in the last `window_s` seconds, by plane.
+
+    This is honest live ALARM LOAD — how many anomalies the detectors are
+    raising right now — split into network (Modbus) and robot planes. A burst
+    while nothing is being injected is the operational signal that a detector is
+    misbehaving ("alert storm"). It deliberately does NOT label the alarms as
+    false positives: that cannot be known live without ground-truth triage.
+    """
+    out = {'network': 0, 'robot': 0, 'all': 0}
+    if not AI_ALERTS.exists():
+        return out
+    cutoff = dt.datetime.utcnow() - dt.timedelta(seconds=window_s)
+    with AI_ALERTS.open('r', errors='replace') as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            ts_raw = rec.get('timestamp') or rec.get('ts')
+            if ts_raw:
+                try:
+                    ts = dt.datetime.fromisoformat(str(ts_raw).replace('Z', ''))
+                    if ts < cutoff:
+                        continue
+                except (ValueError, TypeError):
+                    pass
+            alert = rec.get('alert') if isinstance(rec.get('alert'), dict) else {}
+            cat = str(rec.get('category') or alert.get('category') or '').lower()
+            plane = 'robot' if 'robot' in cat else 'network'
+            out[plane] += 1
+            out['all'] += 1
+    return out
+
+
 def _render_metrics() -> str:
     out: list[str] = []
 
@@ -616,6 +654,14 @@ def _render_metrics() -> str:
          'gauge',
          [({'category': c}, n) for c, n in s2.items()] or
          [({'category': 'none'}, 0)])
+
+    alarm_load = _ai_anomaly_alerts_recent(300.0)
+    emit('lab_ai_anomaly_alerts_5m',
+         'AI anomaly alarms raised in the last 5 minutes (live alarm LOAD by '
+         'plane=network|robot|all). NOT a false-positive count: a burst with no '
+         'injected attack indicates a misbehaving detector / alert storm.',
+         'gauge',
+         [({'plane': p}, alarm_load[p]) for p in ('network', 'robot', 'all')])
 
     s2sev = _stage2_alert_severities()
     emit('lab_stage2_alert_severity_total',

@@ -597,7 +597,7 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
               <BarChart3 size={13} className="text-slate-400" />Model Performance
             </div>
             <span className="text-[10px] text-slate-600">
-              held-out evaluation{perf ? ` · ${(perf.n_normal ?? 0) + (perf.n_attack ?? 0)} labeled windows` : ''}
+              validation benchmark · network meta-scorer{perf?.generated_at ? ` · ${perf.generated_at.slice(0, 10)}` : ''}{perf ? ` · ${(perf.n_normal ?? 0) + (perf.n_attack ?? 0)} labeled windows` : ''} · not live
             </span>
           </div>
           {!perf ? (
@@ -609,7 +609,7 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
                   { l: 'ROC-AUC', v: perf.roc_auc, fmt: (x: number) => x.toFixed(3), good: (x: number) => x >= 0.9 },
                   { l: 'Precision', v: perf.precision, fmt: (x: number) => `${(x * 100).toFixed(1)}%`, good: (x: number) => x >= 0.9 },
                   { l: 'Recall', v: perf.recall, fmt: (x: number) => `${(x * 100).toFixed(1)}%`, good: (x: number) => x >= 0.9 },
-                  { l: 'False-positive rate', v: perf.false_positive_rate, fmt: (x: number) => `${(x * 100).toFixed(2)}%`, good: (x: number) => x <= 0.02 },
+                  { l: 'FP rate · eval set', v: perf.false_positive_rate, fmt: (x: number) => `${(x * 100).toFixed(2)}%`, good: (x: number) => x <= 0.02 },
                 ].map(m => (
                   <div key={m.l} className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2.5">
                     <div className="text-[9px] uppercase tracking-wider text-slate-500">{m.l}</div>
@@ -618,6 +618,11 @@ export function AIEnginePage({ hmiState, metrics }: Props) {
                     </div>
                   </div>
                 ))}
+              </div>
+              <div className="text-[10px] text-slate-500 leading-relaxed -mt-1">
+                Offline scores on a labeled hold-out set — a <span className="text-slate-400">benchmark, not a live measurement</span>, and only the network
+                meta-scorer. You cannot know an alarm is a false positive at fire time; live <span className="text-slate-400">alarm load</span> (a burst with no injected
+                attack = a misbehaving detector) is tracked on the Grafana AI board.
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* learned fusion weights */}
