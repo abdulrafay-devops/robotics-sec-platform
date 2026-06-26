@@ -59,11 +59,11 @@ Actions and the `ubuntu-latest` runner label are already configured in `docker-c
 Gitea calls the pipeline service directly; the verdict shows on the dashboard **Stages** page.
 
 1. Repo → **Settings → Webhooks → Add Webhook → Gitea**:
-   - **Target URL:** `http://container-ai:9000/webhook`
+   - **Target URL:** `http://192.168.40.30:9000/webhook`  (use the AI container's mgmt-zone **IP**, not the name — Gitea is on the IT zone and Docker DNS won't resolve `container-ai` across zones; the cross-zone route + firewall conduit are already in place and verified reachable)
    - **HTTP Method:** POST, **Content type:** `application/json`
-   - **Secret:** the value of `GITEA_WEBHOOK_SECRET` from your `.env`
+   - **Secret:** the value of `GITEA_WEBHOOK_SECRET` from your `.env` (paste it exactly — the receiver verifies the HMAC-SHA256 signature)
    - **Trigger:** Push events → Add Webhook.
-2. Push any commit. The webhook fires `run_pipeline.sh` inside `container-ai` (all 6 gates).
+2. Push any commit. The webhook fires `run_pipeline.sh` inside `container-ai`, running the **code-quality gates** (PLC / HMI / SROS2 lints — `LAB_GATES=plc,hmi,sros2`), the same set as the Actions workflow, so a clean commit isn't failed by the live vuln/baseline gates.
 3. See the result:
    - Dashboard → **Stages** page → *Pipeline Verdict* (PASS/FAIL), or
    - `docker logs container-ai | grep -A3 "Gate 1"` to see the lint output, or
