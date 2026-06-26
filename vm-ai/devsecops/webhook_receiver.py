@@ -26,12 +26,21 @@ WEBHOOK_SECRET = os.environ.get("GITEA_WEBHOOK_SECRET", "")
 def run_pipeline() -> None:
     LOG.info("Starting background pipeline execution...")
     try:
+        # A push gate must judge the PUSHED CODE — the static code-quality gates
+        # (PLC Structured-Text, HMI, SROS2 policy lints) — exactly like the
+        # Gitea Actions workflow (.gitea/workflows/ci.yml). Gates 4-6
+        # (vuln/baseline/acceptance) assess live runtime state, not the commit,
+        # so a clean commit must not be failed by them here. Override with
+        # LAB_WEBHOOK_GATES if you want a different set.
+        env = {**os.environ,
+               "LAB_GATES": os.environ.get("LAB_WEBHOOK_GATES", "plc,hmi,sros2")}
         # Run run_pipeline.sh on VM-AI
         res = subprocess.run(
             ["bash", "/opt/lab/vm-ai/devsecops/run_pipeline.sh"],
             capture_output=True,
             text=True,
             check=False,
+            env=env,
         )
         LOG.info(f"Pipeline finished. Exit code: {res.returncode}")
         LOG.debug(f"Pipeline stdout: {res.stdout}")
