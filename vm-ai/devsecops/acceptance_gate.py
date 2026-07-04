@@ -34,12 +34,13 @@ LOG = logging.getLogger('stage5.acceptance_gate')
 # the lab's single-host topology we just shell-out locally.
 # Stage-2 replay smoke + Stage-3 safety loop. These run only when Gate 6 is
 # enabled (i.e. LAB_SKIP_ACCEPTANCE unset). Stored as full argv so each uses the
-# correct interpreter: the replay smoke is a Python module, the safety loop a
-# shell script. (Previously pointed at stage2_live_smoke.sh, which no longer
-# exists after the rename to the *_docker.py harness -- a latent break that only
-# surfaced if Gate 6 was turned on.)
+# correct interpreter -- both now point at the Docker *_docker.py harnesses.
+# (History: REPLAY was repointed from the old stage2_live_smoke.sh, and
+# SAFETY_LOOP from the Vagrant-era fix_and_retest_stage3.sh, when those legacy
+# scripts were removed. run_stage3_gates_docker.py runs the same two Stage-3
+# gates -- safety-loop timing + unsigned-peer rejection -- against container-ot.)
 REPLAY = ['python3', '/vagrant/infra/tests/stage2_live_smoke_docker.py']
-SAFETY_LOOP = ['bash', '/vagrant/infra/tests/fix_and_retest_stage3.sh']
+SAFETY_LOOP = ['python3', '/vagrant/infra/tests/run_stage3_gates_docker.py']
 
 
 def _run(cmd: list[str], timeout: int) -> tuple[int, str]:
