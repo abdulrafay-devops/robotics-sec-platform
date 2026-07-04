@@ -16,3 +16,7 @@ node_modules/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Local AI-assistant tool config (not part of the project)
+.claude/
+.agents/

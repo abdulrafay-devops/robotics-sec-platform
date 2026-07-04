@@ -1,3 +1,0 @@
-AFTER densify(4Hz)+recalibrate:
-  pca_threshold.json mean=3.438 std=1.343 zalert=4.0
-  tf_threshold.json mean=72.366 std=27.602 zalert=4.0
