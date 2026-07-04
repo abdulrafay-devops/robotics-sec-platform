@@ -20,3 +20,8 @@ __pycache__/
 # Local AI-assistant tool config (not part of the project)
 .claude/
 .agents/
+
+# Local-only planning/export artifacts — not part of the shipped project
+phase1-idmz-architecture.excalidraw
+phase1-idmz-architecture.png
+skills-lock.json
