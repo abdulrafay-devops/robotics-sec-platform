@@ -1,0 +1,33 @@
+# Governed safe active-scan policy for Stage 4.
+#
+# This file intentionally scans only brokered/lab service endpoints, not raw
+# fragile controller stacks. The scanner enforces this policy before it runs
+# nmap and writes an auditable report under /var/lab/state.
+enabled: true
+allowed_cidrs:
+  - 192.168.10.0/24
+maintenance_windows:
+  - name: weekly-lab-maintenance
+    days: [sun]
+    start_utc: "01:00"
+    end_utc: "03:00"
+fragile_ports:
+  - 102     # Siemens S7
+  - 502     # raw Modbus PLC runtime
+  - 503     # safety supervisor / SIS endpoint
+  - 20000   # DNP3
+  - 44818   # EtherNet/IP
+  - 4840    # OPC UA
+safe_nmap:
+  max_rate: 2
+  scan_delay_ms: 500
+  max_retries: 1
+  max_parallelism: 1
+  host_timeout_s: 45
+targets:
+  - host: 192.168.10.10
+    ports: [3389, 5020, 8002, 8080]
+    rationale: >-
+      Lab OT host brokered endpoints only: RDP, read-only telemetry proxy,
+      control gateway, and OpenPLC web UI. Raw PLC Modbus 502 and the safety
+      supervisor 503 are excluded as fragile safety-critical services.

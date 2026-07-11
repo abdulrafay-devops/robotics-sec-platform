@@ -19,7 +19,7 @@ steps:
     requires_human_approval: false
   - name: graded_isolate
     cmd: /opt/lab/bin/ir-isolate ${SRC_IP}
-    requires_human_approval: false
+    requires_human_approval: true
   - name: graded_slow
     cmd: /opt/lab/bin/ir-slow ${INCIDENT_ID}
     requires_human_approval: true
@@ -56,7 +56,7 @@ from the observed function codes (FC5/FC6) and target addresses.
 | Grade | Action | Approval |
 |-------|--------|----------|
 | Watch | Raise logging fidelity, capture full Modbus stream. | auto |
-| Isolate | `iptables` DROP from `${SRC_IP}`. | auto |
+| Isolate | `iptables` DROP from `${SRC_IP}` after analyst approval. | human |
 | Slow | Drop the arm to ISO-10218 safety speed (250 mm/s). | human |
 | Stop | Safety supervisor asserts safe state (latched). | human |
 

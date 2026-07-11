@@ -17,7 +17,7 @@ steps:
     requires_human_approval: false
   - name: graded_isolate
     cmd: /opt/lab/bin/ir-isolate ${SRC_IP}
-    requires_human_approval: false
+    requires_human_approval: true
   - name: graded_slow
     cmd: /opt/lab/bin/ir-slow ${INCIDENT_ID}
     requires_human_approval: true
@@ -55,7 +55,7 @@ Operator should review:
 | Grade | Action | Approval |
 |-------|--------|----------|
 | Watch | Increase logging fidelity. | auto |
-| Isolate | iptables DROP from `${SRC_IP}` on the docker bridge. | auto |
+| Isolate | iptables DROP from `${SRC_IP}` on the docker bridge after analyst approval. | human |
 | Slow | Drop robot to ISO-10218 safety speed (250 mm/s). | human |
 | Stop | Safety supervisor asserts safe state. | human |
 

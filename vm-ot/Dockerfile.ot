@@ -33,9 +33,9 @@ RUN git clone --depth 1 https://github.com/thiagoralves/OpenPLC_v3.git openplc &
 # Create necessary directories
 RUN mkdir -p /var/lab/log /var/lab/state /opt/lab/vm-ot/sros2 /opt/lab/vm-ot/gazebo /opt/lab/vm-ot/traffic /opt/lab/bin
 
-# GUI user used only through Apache Guacamole -> RDP.
+# GUI account used only through Apache Guacamole -> RDP. Its password is
+# applied at container start from OT_RDP_PASSWORD, never stored in an image layer.
 RUN useradd -m -s /bin/bash lab && \
-    echo 'lab:lab2026' | chpasswd && \
     usermod -aG sudo,ssl-cert lab && \
     echo 'lab ALL=(ALL) NOPASSWD: /opt/lab/bin/start-gazebo-gui.sh' > /etc/sudoers.d/lab-gazebo && \
     chmod 0440 /etc/sudoers.d/lab-gazebo && \
@@ -72,8 +72,9 @@ RUN cd /opt/lab/openplc/webserver && \
     sqlite3 openplc.db "INSERT OR IGNORE INTO Programs (Name, Description, File, Date_upload) VALUES ('production', 'Lab production ladder', 'production.st', strftime('%s','now'));" && \
     sqlite3 openplc.db "UPDATE Settings SET Value='true' WHERE Key='Start_run_mode';"
 
-# Set up entrypoint
+# Set up runtime credential configuration and entrypoint
+COPY runtime_credentials.py /opt/lab/bin/configure_runtime_credentials.py
 COPY entrypoint_ot.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN chmod +x /entrypoint.sh /opt/lab/bin/configure_runtime_credentials.py
 
 ENTRYPOINT ["/entrypoint.sh"]

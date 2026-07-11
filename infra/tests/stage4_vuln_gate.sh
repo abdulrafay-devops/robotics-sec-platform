@@ -51,6 +51,21 @@ ${PY} ${ROOT}/inventory.py --no-active 2>&1 | tee -a "${LOG}" || fail "inventory
 [[ -s ${STATE}/inventory.json ]] || fail "inventory.json missing or empty"
 ${PY} -c "import json,sys; d=json.load(open('${STATE}/inventory.json')); assert isinstance(d,list), 'not a list'; print(f'inventory: {len(d)} assets')" \
     2>&1 | tee -a "${LOG}" || fail "inventory.json failed schema check"
+${PY} -c "
+import json
+assets = json.load(open('${STATE}/inventory.json'))
+by_ip = {a.get('ip'): a for a in assets}
+plc = by_ip.get('192.168.10.10')
+assert plc, 'CMDB asset 192.168.10.10 missing from inventory'
+assert 'asset_register' in (plc.get('discovery_methods') or []), 'asset_register method missing'
+assert plc.get('software'), 'installed software inventory missing for PLC asset'
+sis = by_ip.get('192.168.10.11')
+assert sis, 'CMDB SIS asset 192.168.10.11 missing from inventory'
+meta = json.load(open('${STATE}/scan_meta.json'))
+assert meta.get('assets_in_scope', 0) >= 2, 'scan_meta assets_in_scope missing'
+assert 'asset_register' in (meta.get('discovery_methods') or []), 'scan_meta missing asset_register source'
+print('asset register scope: {} assets, {} live observed'.format(meta.get('assets_in_scope'), meta.get('live_hosts_found', 0)))
+" 2>&1 | tee -a "${LOG}" || fail "asset-register inventory scope invalid"
 
 say "=== Stage 4 / step 2: cve correlation ==="
 ${PY} ${ROOT}/cve_correlate.py 2>&1 | tee -a "${LOG}" || fail "cve_correlate.py exited non-zero"
@@ -62,6 +77,10 @@ assert isinstance(d, list), 'vulnerabilities.json not a list'
 for f in d:
     for k in ('asset_ip','cve_id','cvss','title','source','remediation'):
         assert k in f, f'missing key {k} in finding {f}'
+expected = {'CVE-2021-31229', 'CVE-2024-23653'}
+found = {f['cve_id'] for f in d}
+missing = expected - found
+assert not missing, f'expected lab CVEs missing from Stage 4 output: {sorted(missing)}'
 print(f'vulnerabilities: {len(d)} findings ok')
 " 2>&1 | tee -a "${LOG}" || fail "vulnerabilities.json schema invalid"
 

@@ -19,7 +19,7 @@ steps:
     requires_human_approval: false
   - name: graded_isolate
     cmd: /opt/lab/bin/ir-isolate ${SRC_IP}
-    requires_human_approval: false
+    requires_human_approval: true
   - name: graded_slow
     cmd: /opt/lab/bin/ir-slow ${INCIDENT_ID}
     requires_human_approval: true
@@ -53,7 +53,7 @@ tell.
 | Grade | Action | Approval |
 |-------|--------|----------|
 | Watch | Capture the full value timeline of MW4. | auto |
-| Isolate | `iptables` DROP from `${SRC_IP}`. | auto |
+| Isolate | `iptables` DROP from `${SRC_IP}` after analyst approval. | human |
 | Slow | Drop the arm to safety speed if the setpoint drives motion. | human |
 
 ## Eradication

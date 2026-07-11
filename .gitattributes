@@ -1,0 +1,9 @@
+*.sh text eol=lf
+infra/router/*.conf text eol=lf
+vm-sec/vuln/*.py text eol=lf
+vm-sec/vuln/*.yml text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.tsx text eol=lf
+Dockerfile* text eol=lf
+vm-ai/ir/bin/* text eol=lf

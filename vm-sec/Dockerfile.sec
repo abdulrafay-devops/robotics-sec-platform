@@ -62,6 +62,7 @@ COPY zeek/node.cfg.tpl /opt/zeek/etc/node.cfg.tpl
 COPY suricata/suricata.yaml /etc/suricata/suricata.yaml
 COPY suricata/rules/ /opt/lab/vm-sec/suricata/rules/
 COPY ntopng/ntopng.conf /opt/lab/vm-sec/ntopng/ntopng.conf
+COPY ntopng/seed_admin.py /opt/lab/vm-sec/ntopng/seed_admin.py
 COPY log_shipper/ /opt/lab/log_shipper/
 COPY vuln/ /opt/lab/vm-sec/vuln/
 

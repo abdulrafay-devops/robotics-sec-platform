@@ -13,3 +13,22 @@ exceptions:
     justification: |
       XKCP SHA-3 reference impl bug; not invoked by any lab service path.
       Tracked for upgrade with the next Ubuntu 22.04 kernel rollover.
+  # >>> demo-risk-acceptance (managed by demo_vuln_gate.sh) >>>
+  - cve_id: "CVE-2021-31229"
+    until: "2026-09-30"
+    approver: "lab-admin@platform.local"
+    justification: |
+      OpenPLC v3 has no clean fixed release. Compensating controls in place:
+      the web admin :8080 is unreachable from the IT zone (IDMZ router
+      default-deny, verified) and reachable only from OT/mgmt; Zeek + Suricata
+      + the AI engine monitor the PLC. Risk-accepted until 2026-09-30; tracked
+      for OpenPLC upgrade + web-auth enablement at the next maintenance window.
+  - cve_id: "CVE-2024-23653"
+    until: "2026-09-30"
+    approver: "lab-admin@platform.local"
+    justification: |
+      pymodbus 2.5.3 is used only as a CLIENT in OpenPLC's web monitor; the
+      network-facing Modbus server on :502 is OpenPLC's C runtime, not
+      pymodbus, so the server-side DoS is not reachable. A blind upgrade to
+      3.x breaks the 2.x client API. Deferred to the web-monitor refactor.
+  # <<< demo-risk-acceptance <<<

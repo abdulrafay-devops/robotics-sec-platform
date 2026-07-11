@@ -45,6 +45,10 @@ mkdir -p /var/lab/state/logs
 chmod 0777 /var/lab/state/logs
 echo "openplc program started and logging to syslog active" > /var/log/syslog
 
+# Rotate the local RDP and OpenPLC passwords before either service accepts a login.
+# Missing or weak values stop this OT container rather than restoring a demo default.
+/opt/lab/bin/configure_runtime_credentials.py
+
 # Minimal restart-supervision (mirrors vm-ai/entrypoint_ai.sh). Keeps a critical
 # safety process alive across crashes so a transient failure (e.g. a momentary
 # heartbeat TCP blip, or the heartbeat process dying) cannot leave the heartbeat

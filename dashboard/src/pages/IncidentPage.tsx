@@ -15,43 +15,43 @@ const PLAYBOOK_CATALOG = [
     id: 'pb_command_injection', attack: 'modbus_command_injection', title: 'Modbus Command Injection',
     mitre: 'T0855', technique: 'Unauthorized Command Message', tactic: 'Impair Process Control', severity: 'CRITICAL',
     signature: 'Coil + cycle-register (MW0) writes from a non-HMI source',
-    steps: ['Capture Modbus stream + forensic snapshot (auto)', 'Isolate source — iptables DROP (auto)', 'Drop arm to ISO-10218 safety speed (human)', 'Assert latched safe state (human)', 'Verify control-program hash vs golden baseline', 'Post-mortem + close (human)'],
+    steps: ['Capture Modbus stream + forensic snapshot (auto)', 'Isolate source - iptables DROP (human approval)', 'Drop arm to ISO-10218 safety speed (human)', 'Assert latched safe state (human)', 'Verify control-program hash vs golden baseline', 'Post-mortem + close (human)'],
   },
   {
     id: 'pb_replay', attack: 'modbus_replay', title: 'Modbus Replay Attack',
     mitre: 'T0831', technique: 'Manipulation of Control', tactic: 'Impair Process Control', severity: 'HIGH',
     signature: 'Repeating FC6 writes to scratch regs MW10–13, off-baseline cadence',
-    steps: ['Capture replayed sequence + timing (auto)', 'Isolate source — iptables DROP (auto)', 'Drop arm to safety speed (human)', 'Rotate session keys so the capture cannot be re-used', 'Post-mortem + close (human)'],
+    steps: ['Capture replayed sequence + timing (auto)', 'Isolate source - iptables DROP (human approval)', 'Drop arm to safety speed (human)', 'Rotate session keys so the capture cannot be re-used', 'Post-mortem + close (human)'],
   },
   {
     id: 'pb_coil_flood', attack: 'coil_flood', title: 'Coil Flood / Denial of Service',
     mitre: 'T0814', technique: 'Denial of Service', tactic: 'Inhibit Response Function', severity: 'HIGH',
     signature: 'Very high-rate FC5 coil writes to a single point (scan-cycle starvation)',
-    steps: ['Capture rate + target coil (auto)', 'Isolate source — iptables DROP (auto)', 'Drop arm to safety speed while scan time recovers (human)', 'Rate-limit Modbus writes at OT gateway', 'Post-mortem + close (human)'],
+    steps: ['Capture rate + target coil (auto)', 'Isolate source - iptables DROP (human approval)', 'Drop arm to safety speed while scan time recovers (human)', 'Rate-limit Modbus writes at OT gateway', 'Post-mortem + close (human)'],
   },
   {
     id: 'pb_recon_scan', attack: 'recon_scan', title: 'OT Reconnaissance Scan',
     mitre: 'T0846', technique: 'Remote System Discovery', tactic: 'Discovery', severity: 'MEDIUM',
     signature: 'Broad FC3/FC1 read sweep across the map, no writes',
-    steps: ['Tag source, raise logging, alert analyst (auto)', 'Isolate source (human — read-only, low harm)', 'Restrict read scope at OT gateway', 'Post-mortem + close (human)'],
+    steps: ['Tag source, raise logging, alert analyst (auto)', 'Isolate source - iptables DROP (human approval)', 'Restrict read scope at OT gateway', 'Post-mortem + close (human)'],
   },
   {
     id: 'pb_safety_tamper', attack: 'safety_tamper', title: 'Safety / E-Stop Tampering',
     mitre: 'T0880', technique: 'Loss of Safety', tactic: 'Impact', severity: 'CRITICAL',
     signature: 'Writes to the e-stop coil + safety_state register (MW2)',
-    steps: ['Capture every safety-path write (auto)', 'Isolate source — iptables DROP (auto)', 'Assert latched safe state — arm freezes (human)', 'Verify hardwired relay out-of-band', 'Manual safety audit before resume', 'Post-mortem + close (human)'],
+    steps: ['Capture every safety-path write (auto)', 'Isolate source - iptables DROP (human approval)', 'Assert latched safe state — arm freezes (human)', 'Verify hardwired relay out-of-band', 'Manual safety audit before resume', 'Post-mortem + close (human)'],
   },
   {
     id: 'pb_setpoint_drift', attack: 'setpoint_drift', title: 'Stealthy Setpoint Drift',
     mitre: 'T0836', technique: 'Modify Parameter', tactic: 'Impair Process Control', severity: 'HIGH',
     signature: 'Slow, small writes to one setpoint register (MW4) — low & slow',
-    steps: ['Capture full value timeline of MW4 (auto)', 'Isolate source — iptables DROP (auto)', 'Drop arm to safety speed if it drives motion (human)', 'Restore setpoint from golden config', 'Post-mortem + close (human)'],
+    steps: ['Capture full value timeline of MW4 (auto)', 'Isolate source - iptables DROP (human approval)', 'Drop arm to safety speed if it drives motion (human)', 'Restore setpoint from golden config', 'Post-mortem + close (human)'],
   },
   {
     id: 'pb_bulk_write', attack: 'bulk_write', title: 'Unauthorized Bulk Register Write',
     mitre: 'T0843', technique: 'Program Download', tactic: 'Lateral Movement', severity: 'CRITICAL',
     signature: 'FC16 multi-register block write (baseline only writes singles)',
-    steps: ['Capture written block: range + values (auto)', 'Isolate source — iptables DROP (auto)', 'Assert safe state before logic runs on tampered memory (human)', 'Compare PLC image vs golden hash; roll back if changed', 'Post-mortem + close (human)'],
+    steps: ['Capture written block: range + values (auto)', 'Isolate source - iptables DROP (human approval)', 'Assert safe state before logic runs on tampered memory (human)', 'Compare PLC image vs golden hash; roll back if changed', 'Post-mortem + close (human)'],
   },
   {
     id: 'pb_robot_anomaly', attack: 'robot_behavior', title: 'Robot Joint-Dynamics Anomaly',
@@ -209,7 +209,7 @@ export function IncidentPage({ metrics }: Props) {
           )}
         </div>
         <p className="text-[11px] text-slate-500 mb-3">
-          Safety-critical mitigation tiers require analyst approval before execution. Review and authorise each queued action.
+          Network isolation and safety-impacting mitigation tiers require analyst approval before execution. Review and authorise each queued action.
         </p>
 
         {pending.length === 0 ? (

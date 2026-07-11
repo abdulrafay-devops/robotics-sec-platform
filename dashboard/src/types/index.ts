@@ -133,11 +133,30 @@ export interface PipelineVerdict {
   log: string
 }
 
+export interface FirewallDenyEvidence {
+  timestamp: string
+  source_container: string
+  source_zone?: string
+  source_ip?: string
+  destination_ip: string
+  destination_zone?: string
+  destination_port: number | string
+  protocol?: string
+  action: string
+  prefix?: string
+  result?: string
+  evidence_source?: string
+  rule?: string
+  note?: string
+}
+
 export interface StagesReports {
   vulnerabilities: VulnerabilityReport[] | null
   baseline_drift: BaselineDriftReport | null
   integrity_baseline: IntegrityBaselineReport | null
   inventory: InventoryAsset[] | null
+  scan_meta?: Record<string, unknown> | null
   pipeline_verdict: PipelineVerdict | null
+  firewall_denies: FirewallDenyEvidence[] | null
 }
 

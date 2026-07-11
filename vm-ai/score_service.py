@@ -63,6 +63,7 @@ logging.basicConfig(
 
 MODELS_DIR = os.environ.get("LAB_MODELS_DIR", "/opt/lab/models")
 INJECTION_STATE_FILE = "/var/lab/state/last_injection.json"
+FIREWALL_DENY_LOG_PATH = os.environ.get("LAB_FIREWALL_DENY_LOG", "/var/log/idmz/firewall-deny.jsonl")
 # Robot-plane demo injection: writing this trigger makes robot_consumer.py score a
 # synthetic tampered joint window with the REAL LSTM (mirrors the Modbus injector).
 ROBOT_TRIGGER_FILE = "/var/lab/state/robot_attack_trigger.json"
@@ -979,6 +980,30 @@ def _valid_exceptions() -> dict:
     return valid
 
 
+def _read_firewall_denies(limit: int = 25) -> List[dict]:
+    """Return newest firewall deny evidence records from the mounted JSONL file."""
+    path = Path(FIREWALL_DENY_LOG_PATH)
+    if not path.exists():
+        return []
+    records = deque(maxlen=max(1, limit))
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            for raw in fh:
+                line = raw.strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(event, dict):
+                    records.append(event)
+    except OSError as exc:
+        LOG.error("Failed to read firewall deny evidence log %s: %s", path, exc)
+        return []
+    return list(reversed(records))
+
+
 @app.get("/api/stages/reports", dependencies=[Depends(_require_api_key)])
 def get_stages_reports() -> dict:
     """Read and return static security reports from filesystem for stages rendering."""
@@ -1059,7 +1084,8 @@ def get_stages_reports() -> dict:
         "integrity_baseline": integrity_data,
         "inventory": inventory_data,
         "scan_meta": scan_meta,
-        "pipeline_verdict": pipeline_data
+        "pipeline_verdict": pipeline_data,
+        "firewall_denies": _read_firewall_denies(),
     }
 
 # ---------- Demo: Attack Injection -------------------------------------------

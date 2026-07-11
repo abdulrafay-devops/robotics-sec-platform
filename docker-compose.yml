@@ -26,6 +26,8 @@ services:
       dmz-net:  { ipv4_address: 192.168.30.2 }
       mgmt-net: { ipv4_address: 192.168.40.2 }
       ot-net:   { ipv4_address: 192.168.10.2 }
+    volumes:
+      - firewall-logs:/var/log/idmz
     logging:
       driver: "json-file"
       options: { max-size: "10m", max-file: "3" }
@@ -39,6 +41,8 @@ services:
     restart: unless-stopped
     environment:
       - LAB_API_KEY=${LAB_API_KEY}
+      - OT_RDP_PASSWORD=${OT_RDP_PASSWORD:?OT_RDP_PASSWORD must be set in .env}
+      - OPENPLC_WEB_PASSWORD=${OPENPLC_WEB_PASSWORD:?OPENPLC_WEB_PASSWORD must be set in .env}
     deploy:
       resources:
         limits: { memory: 4G, cpus: '2.0' }
@@ -86,6 +90,7 @@ services:
       - LAB_REDIS_HOST=192.168.40.30   # AI Redis, via router conduit (OT->mgmt:6379)
       - LAB_REDIS_PORT=6379
       - LAB_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - NTOPNG_ADMIN_PASSWORD=${NTOPNG_ADMIN_PASSWORD:?NTOPNG_ADMIN_PASSWORD must be set in .env}
     networks:
       # Single-homed on OT: an OT-resident IDS. No mgmt NIC -> cannot pivot to mgmt.
       ot-net:   { ipv4_address: 192.168.10.20 }
@@ -147,6 +152,7 @@ services:
       - ai-evidence:/var/lab/evidence
       - ai-artifacts:/var/lab/artifacts
       - sec-logs:/var/lab/sec-log:ro
+      - firewall-logs:/var/log/idmz:ro
       - deploy-store:/var/lab/deploy-store   # CI signs + publishes here (Stage 5)
       - ./:/vagrant:ro
     logging:
@@ -224,6 +230,29 @@ services:
       timeout: 5s
       retries: 5
 
+  guac-bootstrap:
+    image: postgres:16-alpine
+    container_name: lab-guac-bootstrap
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      PGHOST: postgres
+      PGDATABASE: guacamole_db
+      PGUSER: guacamole_user
+      OT_RDP_PASSWORD: ${OT_RDP_PASSWORD:?OT_RDP_PASSWORD must be set in .env}
+      GUAC_ADMIN_PASSWORD: ${GUAC_ADMIN_PASSWORD:?GUAC_ADMIN_PASSWORD must be set in .env}
+      GUAC_OPERATOR_PASSWORD: ${GUAC_OPERATOR_PASSWORD:?GUAC_OPERATOR_PASSWORD must be set in .env}
+      GUAC_VENDOR_PASSWORD: ${GUAC_VENDOR_PASSWORD:?GUAC_VENDOR_PASSWORD must be set in .env}
+      GUAC_AUDITOR_PASSWORD: ${GUAC_AUDITOR_PASSWORD:?GUAC_AUDITOR_PASSWORD must be set in .env}
+    volumes:
+      - ./infra/dmz/bootstrap/guacamole-bootstrap.sh:/usr/local/bin/guacamole-bootstrap.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/guacamole-bootstrap.sh"]
+    networks:
+      dmz-net: { ipv4_address: 192.168.30.23 }
+
   guacd:
     image: guacamole/guacd:1.5.5
     container_name: lab-guacd
@@ -253,6 +282,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      guac-bootstrap:
+        condition: service_completed_successfully
       guacd:
         condition: service_started
     cap_add:
@@ -337,6 +368,7 @@ volumes:
   ai-models:
   ai-evidence:
   ai-artifacts:
+  firewall-logs:
   deploy-store:   # Stage 5 signed-artifact store (AI writes, historian serves, OT pulls)
   gitea-data:
   runner-data:

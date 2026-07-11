@@ -130,6 +130,55 @@ def offline_gate() -> bool:
     return ok == len(ATTACKS)
 
 
+def human_approval_policy_gate() -> bool:
+    print("\n" + "=" * 72)
+    print(" [B] HUMAN-APPROVAL POLICY GATE - every ir-isolate step is queued")
+    print("=" * 72)
+    playbook_dir = os.path.join(_HERE, "..", "..", "vm-ai", "ir", "playbooks")
+    failures = []
+    checked = 0
+    for fname in sorted(os.listdir(playbook_dir)):
+        if not fname.endswith(".md"):
+            continue
+        path = os.path.join(playbook_dir, fname)
+        current = None
+        steps = []
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            for raw in fh:
+                line = raw.strip()
+                if line.startswith("- name:"):
+                    if current:
+                        steps.append(current)
+                    current = {"name": line.split(":", 1)[1].strip()}
+                elif current and line.startswith("cmd:"):
+                    current["cmd"] = line.split(":", 1)[1].strip()
+                elif current and line.startswith("requires_human_approval:"):
+                    current["approval"] = line.split(":", 1)[1].strip().lower()
+                elif line == "---" and current:
+                    steps.append(current)
+                    current = None
+                    break
+        if current:
+            steps.append(current)
+        for step in steps:
+            if "ir-isolate" not in step.get("cmd", ""):
+                continue
+            checked += 1
+            ok = step.get("approval") == "true"
+            status = "OK" if ok else "FAIL"
+            print("  %-28s %-18s approval=%-7s %s" % (fname, step.get("name", "?"), step.get("approval", "missing"), status))
+            if not ok:
+                failures.append("%s:%s" % (fname, step.get("name", "?")))
+    if checked == 0:
+        print("  no ir-isolate steps found")
+        return False
+    if failures:
+        print("  failing isolate steps: %s" % ", ".join(failures))
+        return False
+    print("  -> %d / %d network isolate steps require human approval" % (checked, checked))
+    return True
+
+
 def _reset_and_restart() -> None:
     print("\n  resetting IR state + restarting container-ai for a clean slate...")
     _dexec(AI, "rm -f /var/lab/state/ir/incidents.jsonl /var/lab/state/ir/pending_approvals.json "
@@ -160,7 +209,7 @@ def _reset_and_restart() -> None:
 
 def live_gate() -> bool:
     print("\n" + "=" * 72)
-    print(" [B] LIVE END-TO-END GATE — each attack -> classified, MITRE-tagged incident")
+    print(" [C] LIVE END-TO-END GATE — each attack -> classified, MITRE-tagged incident")
     print("=" * 72)
     _reset_and_restart()
     seen: set = set()
@@ -209,6 +258,7 @@ def live_gate() -> bool:
 def main() -> int:
     live = "--live" in sys.argv
     a = offline_gate()
+    c = human_approval_policy_gate()
     b = True
     if live:
         b = live_gate()
@@ -216,9 +266,10 @@ def main() -> int:
     print(" RESULT")
     print("=" * 72)
     print("  offline classifier gate: %s" % ("PASS" if a else "FAIL"))
+    print("  human approval gate:     %s" % ("PASS" if c else "FAIL"))
     if live:
         print("  live end-to-end gate:    %s" % ("PASS" if b else "FAIL"))
-    overall = a and b
+    overall = a and c and b
     print("\n  OVERALL: %s" % ("PASS - safe to promote IR changes" if overall else "FAIL - do NOT promote"))
     return 0 if overall else 1
 

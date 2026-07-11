@@ -44,6 +44,12 @@ RUN python3 -m venv venv-ai && \
 COPY requirements.txt /opt/lab/requirements.txt
 RUN venv-ai/bin/pip install -r /opt/lab/requirements.txt
 
+# Install the approved-isolation firewall tool after the Python layer so routine
+# firewall-tool changes do not invalidate the large ML dependency cache.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    iptables \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create necessary directories
 RUN mkdir -p /opt/lab/vm-ai /opt/lab/models /opt/lab/bin /var/lab/log /var/lab/state /var/lab/ingest \
     /var/lab/state/ir/postmortems /var/lab/evidence /var/lab/artifacts /var/lab/log/pipeline /var/lab/log/ros

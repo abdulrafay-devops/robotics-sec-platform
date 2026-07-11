@@ -19,7 +19,7 @@ steps:
     requires_human_approval: false
   - name: graded_isolate
     cmd: /opt/lab/bin/ir-isolate ${SRC_IP}
-    requires_human_approval: false
+    requires_human_approval: true
   - name: graded_slow
     cmd: /opt/lab/bin/ir-slow ${INCIDENT_ID}
     requires_human_approval: true
@@ -51,7 +51,7 @@ poll and the classifier sees coil-only writes at tens of requests per second.
 | Grade | Action | Approval |
 |-------|--------|----------|
 | Watch | Capture rate + target coil for the post-mortem. | auto |
-| Isolate | `iptables` DROP from `${SRC_IP}` to stop the flood at the edge. | auto |
+| Isolate | `iptables` DROP from `${SRC_IP}` to stop the flood at the edge after analyst approval. | human |
 | Slow | Drop the arm to ISO-10218 safety speed while scan time recovers. | human |
 
 ## Eradication

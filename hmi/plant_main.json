@@ -71,10 +71,16 @@
       {
         "type": "input",
         "id": "in_cycle_setpoint",
-        "label": "Cycle time setpoint (s)",
+        "label": "Cycle step setpoint",
         "writes_register": "%MW0",
         "requires_role": "engineer",
-        "requires_confirm": true
+        "requires_confirm": true,
+        "validation": {
+          "type": "integer",
+          "min": 0,
+          "max": 6,
+          "message": "Cycle step must remain within the PLC state-machine range 0..6."
+        }
       }
     ]
   }

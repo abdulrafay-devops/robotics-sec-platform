@@ -19,7 +19,7 @@ steps:
     requires_human_approval: false
   - name: graded_isolate
     cmd: /opt/lab/bin/ir-isolate ${SRC_IP}
-    requires_human_approval: false
+    requires_human_approval: true
   - name: assert_safe_state
     cmd: /opt/lab/bin/ir-stop ${INCIDENT_ID}
     requires_human_approval: true
@@ -52,7 +52,7 @@ tasking, so it is treated as a controller-integrity event.
 | Grade | Action | Approval |
 |-------|--------|----------|
 | Watch | Capture the written block (range + values). | auto |
-| Isolate | `iptables` DROP from `${SRC_IP}` immediately. | auto |
+| Isolate | `iptables` DROP from `${SRC_IP}` after analyst approval. | human |
 | Stop | Safety supervisor asserts safe state before any logic runs on tampered memory. | human |
 
 ## Eradication

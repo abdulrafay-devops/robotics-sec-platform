@@ -6,11 +6,8 @@
 --   • External Vendors — read-only, session-recorded RDP view
 --   • Audit Only      — read-only historian access
 --
--- Passwords are SHA-256(salt || password_utf8) per Guacamole spec.
--- Pre-computed with salt = 32-byte zeros (demo lab only — change in production).
--- operator / Operator2026!  → hash below
--- vendor   / Vendor2026!    → hash below
--- auditor  / Auditor2026!   → hash below
+-- Connection topology and role names are static. Password values and password
+-- hashes are supplied at runtime by guac-bootstrap from the untracked .env file.
 -- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -41,7 +38,6 @@ CROSS JOIN (VALUES
     ('hostname',           '192.168.10.10'),
     ('port',               '3389'),
     ('username',           'lab'),
-    ('password',           'lab2026'),
     ('security',           'any'),
     ('ignore-cert',        'true'),
     ('resize-method',      'display-update'),
@@ -70,7 +66,6 @@ CROSS JOIN (VALUES
     ('hostname',              '192.168.10.10'),
     ('port',                  '3389'),
     ('username',              'lab'),
-    ('password',              'lab2026'),
     ('security',              'any'),
     ('ignore-cert',           'true'),
     ('read-only',             'true'),
@@ -101,7 +96,6 @@ CROSS JOIN (VALUES
     ('hostname',              '192.168.10.10'),
     ('port',                  '3389'),
     ('username',              'lab'),
-    ('password',              'lab2026'),
     ('security',              'any'),
     ('ignore-cert',           'true'),
     ('read-only',             'true'),
@@ -132,7 +126,6 @@ CROSS JOIN (VALUES
     ('hostname',           '192.168.10.10'),
     ('port',               '3389'),
     ('username',           'lab'),
-    ('password',           'lab2026'),
     ('security',           'any'),
     ('ignore-cert',        'true'),
     ('resize-method',      'display-update'),
@@ -161,7 +154,6 @@ CROSS JOIN (VALUES
     ('hostname',    '192.168.10.10'),
     ('port',        '3389'),
     ('username',    'lab'),
-    ('password',    'lab2026'),
     ('security',    'any'),
     ('ignore-cert', 'true'),
     ('read-only',   'true'),
@@ -172,47 +164,14 @@ CROSS JOIN (VALUES
 ON CONFLICT (connection_id, parameter_name) DO UPDATE SET parameter_value = EXCLUDED.parameter_value;
 
 -- ---------------------------------------------------------------------------
--- 5. USERS: operator / vendor / auditor
+-- 5. USER ENTITIES
 -- ---------------------------------------------------------------------------
-DO $$
-DECLARE
-    salt_op  bytea := decode(md5('operator-salt-lab2026'), 'hex');
-    salt_vnd bytea := decode(md5('vendor-salt-lab2026'),   'hex');
-    salt_aud bytea := decode(md5('auditor-salt-lab2026'),  'hex');
-    eid_op   integer;
-    eid_vnd  integer;
-    eid_aud  integer;
-BEGIN
-    -- operator entity
-    INSERT INTO guacamole_entity (name, type) VALUES ('operator', 'USER') ON CONFLICT DO NOTHING;
-    SELECT entity_id INTO eid_op FROM guacamole_entity WHERE name = 'operator' AND type = 'USER';
-    INSERT INTO guacamole_user (entity_id, password_hash, password_salt, password_date, disabled, expired)
-    VALUES (
-        eid_op,
-        digest(salt_op || convert_to('Operator2026!', 'UTF8'), 'sha256'),
-        salt_op, NOW(), false, false
-    ) ON CONFLICT (entity_id) DO NOTHING;
-
-    -- vendor entity
-    INSERT INTO guacamole_entity (name, type) VALUES ('vendor', 'USER') ON CONFLICT DO NOTHING;
-    SELECT entity_id INTO eid_vnd FROM guacamole_entity WHERE name = 'vendor' AND type = 'USER';
-    INSERT INTO guacamole_user (entity_id, password_hash, password_salt, password_date, disabled, expired)
-    VALUES (
-        eid_vnd,
-        digest(salt_vnd || convert_to('Vendor2026!', 'UTF8'), 'sha256'),
-        salt_vnd, NOW(), false, false
-    ) ON CONFLICT (entity_id) DO NOTHING;
-
-    -- auditor entity
-    INSERT INTO guacamole_entity (name, type) VALUES ('auditor', 'USER') ON CONFLICT DO NOTHING;
-    SELECT entity_id INTO eid_aud FROM guacamole_entity WHERE name = 'auditor' AND type = 'USER';
-    INSERT INTO guacamole_user (entity_id, password_hash, password_salt, password_date, disabled, expired)
-    VALUES (
-        eid_aud,
-        digest(salt_aud || convert_to('Auditor2026!', 'UTF8'), 'sha256'),
-        salt_aud, NOW(), false, false
-    ) ON CONFLICT (entity_id) DO NOTHING;
-END $$;
+-- Password hashes are created or rotated by guac-bootstrap before the Guacamole
+-- web application starts. Keeping topology here lets fresh database setup remain
+-- deterministic without storing a usable password in this repository.
+INSERT INTO guacamole_entity (name, type)
+VALUES ('operator', 'USER'), ('vendor', 'USER'), ('auditor', 'USER')
+ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
 -- 6. PERMISSIONS — grant each user READ on their appropriate connections
@@ -256,8 +215,5 @@ FROM guacamole_entity e CROSS JOIN guacamole_connection_group g
 WHERE e.name IN ('operator', 'vendor', 'auditor', 'guacadmin') AND e.type = 'USER'
 ON CONFLICT DO NOTHING;
 
--- NOTE: The default Guacamole admin account (guacadmin / guacadmin) is left intact
--- so the web UI remains accessible. Change the password via the Guacamole UI after
--- first login: Settings → Users → guacadmin → Change Password.
--- Do NOT add SQL password manipulation here — Guacamole uses a binary salt+hash
--- format that cannot be reliably generated with standard PostgreSQL functions.
+-- The runtime guac-bootstrap service creates and rotates all Guacamole password
+-- hashes with fresh random salts before the web application starts.

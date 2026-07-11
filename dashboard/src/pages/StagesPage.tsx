@@ -321,6 +321,7 @@ function SectionTitle({ icon: Icon, text, count }: { icon: any; text: string; co
 
 function Stage1Detail({ reports, metrics }: { reports: any; metrics: PrometheusMetrics | null }) {
   const inv = reports?.inventory ?? []
+  const denies = reports?.firewall_denies ?? []
   return (
     <div className="space-y-4">
       <DataGrid items={[
@@ -343,6 +344,46 @@ function Stage1Detail({ reports, metrics }: { reports: any; metrics: PrometheusM
       </div>
 
       <ScanMetaStrip meta={reports?.scan_meta} />
+
+      <div>
+        <SectionTitle icon={ShieldAlert} text="Firewall Deny Evidence" count={denies.length} />
+        {denies.length === 0 ? (
+          <EmptyState text="No firewall deny evidence recorded yet. Run bash test_policy.sh to generate a blocked-packet proof." />
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-slate-800/50 max-h-48 overflow-y-auto">
+            <table className="min-w-full text-[10.5px] font-mono">
+              <thead className="sticky top-0 bg-slate-950">
+                <tr className="border-b border-slate-800/60 text-slate-500 uppercase text-[9px] tracking-wider">
+                  <th className="px-3 py-2 text-left">Time</th>
+                  <th className="px-3 py-2 text-left">Source</th>
+                  <th className="px-3 py-2 text-left">Destination</th>
+                  <th className="px-3 py-2 text-left">Action</th>
+                  <th className="px-3 py-2 text-left">Evidence File</th>
+                </tr>
+              </thead>
+              <tbody>
+                {denies.slice(0, 8).map((d: any, idx: number) => {
+                  const source = `${d.source_container ?? 'unknown'}${d.source_ip ? ` (${d.source_ip})` : ''}`
+                  const destination = `${d.destination_ip ?? 'unknown'}:${d.destination_port ?? '?'}`
+                  return (
+                    <tr key={`${d.timestamp ?? idx}-${d.source_container ?? 'src'}-${d.destination_ip ?? 'dst'}`} className="border-b border-slate-900 hover:bg-slate-800/20">
+                      <td className="px-3 py-2 text-slate-500">{formatEvidenceTime(d.timestamp)}</td>
+                      <td className="px-3 py-2 text-slate-300">{source}</td>
+                      <td className="px-3 py-2 text-cyan-300 font-bold">{destination}</td>
+                      <td className="px-3 py-2">
+                        <span className="inline-flex items-center rounded border border-red-800 bg-red-950/40 px-1.5 py-0.5 text-[9px] font-bold text-red-300">
+                          {d.action ?? 'DENY'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-slate-600">/var/log/idmz/firewall-deny.jsonl</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <div>
         <SectionTitle icon={Server} text="OT Asset Inventory" count={inv.length} />
@@ -524,17 +565,30 @@ function relTime(ts?: number): string {
   return `${Math.floor(s / 86400)}d ago`
 }
 
+function formatEvidenceTime(value: any) {
+  if (!value) return 'unknown'
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString()
+}
+
 function ScanMetaStrip({ meta }: { meta: any }) {
   if (!meta) return null
   const ports = (meta.open_ports ?? []) as number[]
+  const scanner = String(meta.scanner ?? 'inventory')
+  const isActive = scanner.toLowerCase().includes('active')
+  const assetsInScope = meta.assets_in_scope ?? meta.hosts_found ?? 0
+  const liveHosts = meta.live_hosts_found
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-emerald-900/40 bg-emerald-950/10 px-3 py-2 text-[10px] font-mono">
       <span className="flex items-center gap-1.5 text-emerald-300 font-bold">
-        <Radar size={12} className="text-emerald-400" /> Live scan
+        <Radar size={12} className="text-emerald-400" /> {isActive ? 'Governed scan' : 'Inventory scope'}
       </span>
-      <span className="text-slate-500">last run <span className="text-slate-200">{relTime(meta.last_scan_ts)}</span></span>
-      <span className="text-slate-500">{meta.hosts_found ?? 0} hosts · <span className="text-slate-200">{meta.subnet}</span></span>
-      <span className="text-slate-500 truncate max-w-[260px]">scanner <span className="text-slate-200">{meta.scanner}</span></span>
+      <span className="text-slate-500">updated <span className="text-slate-200">{relTime(meta.last_scan_ts)}</span></span>
+      <span className="text-slate-500">{assetsInScope} assets in <span className="text-slate-200">{meta.subnet}</span></span>
+      {typeof liveHosts === 'number' && (
+        <span className="text-slate-500">{liveHosts} live observed</span>
+      )}
+      <span className="text-slate-500 truncate max-w-[280px]">source <span className="text-slate-200">{scanner}</span></span>
       {ports.length > 0 && (
         <span className="flex items-center gap-1 text-slate-500">open
           {ports.slice(0, 8).map((p) => (
@@ -665,7 +719,7 @@ function Stage5Detail({ reports, metrics }: { reports: any; metrics: PrometheusM
   const v = reports?.pipeline_verdict
   const GATES = [
     { name: 'PLC Lint', desc: 'IEC 61131-3 ST static analysis (R1-R6)' },
-    { name: 'HMI Lint', desc: 'HMI JSON schema and safety-binding check' },
+    { name: 'HMI Lint', desc: 'Credentials, safety writes, and input validation' },
     { name: 'SROS2 Lint', desc: 'DDS-Security permissions XML validation' },
     { name: 'Vuln Gate', desc: 'CVE threshold check (CVSS ≥ 7.0 fails)' },
     { name: 'Baseline Gate', desc: 'Config drift critical check' },

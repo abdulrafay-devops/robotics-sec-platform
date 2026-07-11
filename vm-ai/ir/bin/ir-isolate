@@ -1,16 +1,27 @@
 #!/usr/bin/env bash
-# Stage 6 — graded-containment / Isolate tier.
+# Stage 6 - graded-containment / Isolate tier.
 #
-# Drops all traffic from the offending source IP at the host firewall.
-# Idempotent: the same IP can be isolated multiple times without
-# duplicate rules. Writes a journal line for the audit trail.
-set -u
+# Drops traffic from an approved source IP at the response-plane firewall.
+# This script is intentionally fail-closed: approval must not look successful
+# unless the DROP rule is actually installed.
+set -euo pipefail
+
 SRC=${1:?usage: ir-isolate <src_ip>}
-RULE="-s ${SRC} -j DROP"
-if iptables -C INPUT ${RULE} 2>/dev/null; then
+if [[ ! ${SRC} =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
+    echo "[ir-isolate] invalid IPv4 source: ${SRC}" >&2
+    exit 2
+fi
+if ! command -v iptables >/dev/null 2>&1; then
+    echo "[ir-isolate] iptables binary not found; cannot isolate ${SRC}" >&2
+    exit 127
+fi
+
+RULE=(-s "${SRC}" -j DROP)
+if iptables -C INPUT "${RULE[@]}" 2>/dev/null; then
     echo "[ir-isolate] ${SRC} already isolated"
     exit 0
 fi
-iptables -I INPUT 1 ${RULE}
+iptables -I INPUT 1 "${RULE[@]}"
+iptables -C INPUT "${RULE[@]}" >/dev/null
 logger -t lab-ir "isolate src=${SRC}"
-echo "[ir-isolate] dropped ${SRC} at host firewall"
+echo "[ir-isolate] dropped ${SRC} at response-plane firewall"

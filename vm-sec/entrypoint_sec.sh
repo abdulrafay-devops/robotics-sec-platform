@@ -112,38 +112,23 @@ fi
 touch /var/lab/log/suricata/eve.json
 suricata -c /etc/suricata/suricata.yaml --pidfile /run/suricata.pid -i ${OT_IF} > /var/log/suricata/suricata-startup.log 2>&1 &
 
-# ── Seed ntopng admin login (admin / labdemo) ────────────────────────────────
-# ntopng keeps its users in the AI-zone Redis. With the factory default
-# (admin/admin) it traps EVERY login on a "you must change your password"
-# screen, so the web UI looks broken. We pre-seed a NON-default password plus
-# the admin_password_changed flag BEFORE ntopng starts, so it boots straight to
-# a usable login. Idempotent: only seeds when no admin password exists yet, so
-# a password you set later in the UI is preserved and a fresh/wiped Redis is
-# auto-recovered. Credentials: admin / labdemo
-echo "Seeding ntopng admin credentials (admin/labdemo) if unset..."
-/opt/lab/venv-shipper/bin/python - <<'PYEOF' || echo "ntopng seed skipped (non-fatal)"
-import hashlib, os, sys
-try:
-    import redis
-except Exception as exc:
-    print("redis module unavailable; skipping ntopng seed:", exc); sys.exit(0)
-pw = os.environ.get("LAB_REDIS_PASSWORD") or None
-try:
-    r = redis.Redis(host="192.168.40.30", port=6379, password=pw,
-                    socket_connect_timeout=5, socket_timeout=5)
-    if not r.get("ntopng.user.admin.password"):
-        r.set("ntopng.user.admin.password", hashlib.md5(b"labdemo").hexdigest())
-        r.set("ntopng.user.admin.full_name", "Administrator")
-        r.set("ntopng.user.admin.group", "administrator")
-        r.set("ntopng.user.admin.allowed_nets", "0.0.0.0/0,::/0")
-        r.set("ntopng.user.admin.allowed_interface", "")
-        r.set("ntopng.prefs.admin_password_changed", "1")
-        print("ntopng admin seeded: admin / labdemo")
-    else:
-        print("ntopng admin already configured; leaving as-is")
-except Exception as exc:
-    print("ntopng seed failed (non-fatal):", exc)
-PYEOF
+# Configure ntopng admin login from .env.
+# The credential is written to Redis before ntopng starts. Retrying here avoids
+# continuing with a stale value from a persistent Redis volume.
+echo "Configuring ntopng admin credential from NTOPNG_ADMIN_PASSWORD..."
+attempt=1
+while [ "$attempt" -le 10 ]; do
+    if /opt/lab/venv-shipper/bin/python /opt/lab/vm-sec/ntopng/seed_admin.py; then
+        break
+    fi
+    if [ "$attempt" -eq 10 ]; then
+        echo "ntopng credential configuration failed after ${attempt} attempts" >&2
+        exit 1
+    fi
+    echo "ntopng credential configuration attempt ${attempt} failed; retrying..." >&2
+    attempt=$((attempt + 1))
+    sleep 2
+done
 
 # Start ntopng
 echo "Starting ntopng..."
@@ -170,7 +155,7 @@ echo "Starting Stage 4 Vulnerability Scanner loop..."
 run_vuln_scans() {
     while true; do
         echo "Running scheduled Stage 4 vulnerability scans..."
-        /opt/lab/venv-shipper/bin/python /opt/lab/vm-sec/vuln/inventory.py || true
+        /opt/lab/venv-shipper/bin/python /opt/lab/vm-sec/vuln/inventory.py --no-active || true
         /opt/lab/venv-shipper/bin/python /opt/lab/vm-sec/vuln/cve_correlate.py || true
         # Note: baseline_check.py is run inside container-ot because SROS2 & iptables reside there
         # Run every 600 seconds (10 minutes) for testing, instead of 24h
@@ -178,6 +163,26 @@ run_vuln_scans() {
     done
 }
 run_vuln_scans > /var/lab/log/lab-vuln-scan.log 2>&1 &
+
+# The active scanner is separate from passive recurring scans. It wakes up
+# periodically, but safe_active_scan.py permits only one nmap run per approved
+# maintenance-window occurrence and never retries a failed window automatically.
+echo "Starting governed safe active-scan scheduler..."
+run_safe_active_scan_scheduler() {
+    local poll_seconds="${LAB_SAFE_ACTIVE_SCAN_POLL_SECONDS:-300}"
+    if ! [[ "${poll_seconds}" =~ ^[0-9]+$ ]] || (( poll_seconds < 60 || poll_seconds > 3600 )); then
+        echo "Invalid LAB_SAFE_ACTIVE_SCAN_POLL_SECONDS=${poll_seconds}; using 300 seconds"
+        poll_seconds=300
+    fi
+
+    while true; do
+        /opt/lab/venv-shipper/bin/python /opt/lab/vm-sec/vuln/safe_active_scan.py \
+            --scheduled --execute --policy /opt/lab/vm-sec/vuln/active_scan_policy.yml \
+            --state-dir /var/lab/state || echo "Governed active scan reported an error; no repeat scan will run this window."
+        sleep "${poll_seconds}"
+    done
+}
+run_safe_active_scan_scheduler > /var/lab/log/lab-safe-active-scan.log 2>&1 &
 
 # Start Modbus Traffic baseline generator
 echo "Starting Modbus baseline generator..."

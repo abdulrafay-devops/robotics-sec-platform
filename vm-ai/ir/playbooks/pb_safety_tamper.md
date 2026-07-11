@@ -19,7 +19,7 @@ steps:
     requires_human_approval: false
   - name: graded_isolate
     cmd: /opt/lab/bin/ir-isolate ${SRC_IP}
-    requires_human_approval: false
+    requires_human_approval: true
   - name: assert_safe_state
     cmd: /opt/lab/bin/ir-stop ${INCIDENT_ID}
     requires_human_approval: true
@@ -53,7 +53,7 @@ function that keeps the cell safe.
 | Grade | Action | Approval |
 |-------|--------|----------|
 | Watch | Capture every write to the safety path. | auto |
-| Isolate | `iptables` DROP from `${SRC_IP}` immediately. | auto |
+| Isolate | `iptables` DROP from `${SRC_IP}` after analyst approval. | human |
 | Stop | Safety supervisor asserts the latched safe state — the arm freezes. | human |
 
 ## Eradication

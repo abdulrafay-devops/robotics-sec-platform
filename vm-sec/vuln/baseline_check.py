@@ -41,6 +41,7 @@ import logging
 import os
 import re
 import socket
+import sqlite3
 import stat
 import subprocess
 import sys
@@ -59,29 +60,32 @@ OUT = STATE_DIR / 'baseline_drift.json'
 # --- check primitives -------------------------------------------------
 
 def _check_webui_credentials_not_default(_args: str) -> bool | str:
-    """Try to log in to OpenPLC with the default credentials.
+    """Verify OpenPLC uses the managed web password applied in the OT container.
 
-    A successful login is drift; failure (or no service) is compliant.
+    This deliberately checks the local OpenPLC configuration instead of trying a
+    factory login over HTTP. It avoids distributing a credential pair to the
+    monitoring tier while still detecting password drift.
     """
+    configured_password = os.environ.get('OPENPLC_WEB_PASSWORD', '')
+    if len(configured_password) < 16:
+        return 'OPENPLC_WEB_PASSWORD is unavailable or does not meet the minimum length'
+
+    db_path = Path('/opt/lab/openplc/webserver/openplc.db')
+    if not db_path.exists():
+        return f'OpenPLC database is unavailable: {db_path}'
+
     try:
-        import urllib.request
-        import urllib.parse
-        data = urllib.parse.urlencode(
-            {'username': 'openplc', 'password': 'openplc'}
-        ).encode()
-        req = urllib.request.Request(
-            'http://192.168.10.10:8080/login',
-            data=data, method='POST',
-        )
-        with urllib.request.urlopen(req, timeout=2) as resp:
-            body = resp.read(2048).decode('utf-8', errors='replace')
-            if 'Dashboard' in body or 'Programs' in body:
-                return ('OpenPLC accepted default openplc/openplc credentials '
-                        '— change immediately')
-    except Exception:
-        # Service unreachable (firewall already blocks IT; mgmt-only is OK)
-        # or login failed — both compliant.
-        return True
+        with sqlite3.connect(db_path) as conn:
+            row = conn.execute(
+                'SELECT password FROM Users WHERE username = ?', ('openplc',)
+            ).fetchone()
+    except sqlite3.Error as exc:
+        return f'unable to read the OpenPLC user database: {exc}'
+
+    if row is None:
+        return 'OpenPLC managed web account is missing'
+    if row[0] != configured_password:
+        return 'OpenPLC web password does not match OPENPLC_WEB_PASSWORD'
     return True
 
 
